@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billora – Smart POS Billing</title>
+    <meta name="description" content="Billora – Smart billing app. Send PDF bills instantly via WhatsApp or Email.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- jsPDF for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:      #090b14;
+            --surface: #0e1120;
+            --card:    #131829;
+            --card2:   #181d32;
+            --card3:   #1d2238;
+            --border:  rgba(255,255,255,0.07);
+            --accent:  #6c63ff;
+            --accent2: #a78bfa;
+            --green:   #22d3a5;
+            --green2:  #10b981;
+            --wa:      #25D366;
+            --wa2:     #075e54;
+            --blue:    #3b82f6;
+            --blue2:   #1d4ed8;
+            --red:     #ef4444;
+            --orange:  #f59e0b;
+            --text:    #e2e8f5;
+            --muted:   #8892b0;
+            --radius:  18px;
+            --shadow:  0 8px 40px rgba(0,0,0,0.55);
+        }
+
+        /* ─── LIGHT MODE ─── */
+        body.light-mode {
+            --bg:      #f0f4ff;
+            --surface: #e8edf8;
+            --card:    #ffffff;
+            --card2:   #f5f7ff;
+            --card3:   #eef1fb;
+            --border:  rgba(0,0,0,0.09);
+            --accent:  #6c63ff;
+            --accent2: #7c3aed;
+            --green:   #059669;
+            --green2:  #10b981;
+            --text:    #1e1b4b;
+            --muted:   #6b7280;
+            --shadow:  0 8px 40px rgba(108,99,255,0.12);
+        }
+        body.light-mode {
+            background-image:
+                radial-gradient(ellipse at 15% 10%, rgba(108,99,255,0.08) 0%, transparent 55%),
+                radial-gradient(ellipse at 85% 85%, rgba(16,185,129,0.06) 0%, transparent 55%);
+        }
+        body.light-mode select option { background: #f5f7ff; color: #1e1b4b; }
+        body.light-mode .brand-text h1 {
+            background: linear-gradient(135deg, #1e1b4b 30%, var(--accent) 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        body.light-mode tbody tr:hover { background: rgba(108,99,255,0.04); }
+        body.light-mode tbody tr { border-bottom: 1px solid rgba(0,0,0,0.05); }
+        body.light-mode .pdf-overlay { background: rgba(240,244,255,0.88); }
+
+        /* ─── DARK/LIGHT TOGGLE ─── */
+        .theme-toggle {
+            display: flex; align-items: center; gap: 8px;
+        }
+        .toggle-track {
+            position: relative; width: 52px; height: 28px;
+            background: var(--card2); border: 1px solid var(--border);
+            border-radius: 14px; cursor: pointer;
+            transition: background 0.3s, border-color 0.3s;
+        }
+        .toggle-track.dark  { background: rgba(108,99,255,0.25); border-color: rgba(108,99,255,0.4); }
+        .toggle-thumb {
+            position: absolute; top: 3px; left: 3px;
+            width: 20px; height: 20px; border-radius: 50%;
+            background: var(--accent); transition: transform 0.3s cubic-bezier(.34,1.56,.64,1);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; box-shadow: 0 2px 8px rgba(108,99,255,0.5);
+        }
+        .toggle-track.dark .toggle-thumb { transform: translateX(24px); }
+        .toggle-label {
+            font-size: 0.72rem; font-weight: 700; color: var(--muted); letter-spacing: 0.5px;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 20px 16px 60px;
+            background-image:
+                radial-gradient(ellipse at 15% 10%, rgba(108,99,255,0.12) 0%, transparent 55%),
+                radial-gradient(ellipse at 85% 85%, rgba(34,211,165,0.07) 0%, transparent 55%);
+        }
+
+        /* ─── HEADER ─── */
+        header {
+            max-width: 1120px;
+            margin: 0 auto 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 4px;
+        }
+        .brand {
+            display: flex; align-items: center; gap: 14px;
+        }
+        .brand-logo {
+            width: 52px; height: 52px; border-radius: 14px;
+            object-fit: cover;
+            box-shadow: 0 4px 20px rgba(108,99,255,0.45);
+        }
+        .brand-text h1 {
+            font-size: 1.7rem; font-weight: 900; letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #fff 30%, var(--accent2) 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+            line-height: 1;
+        }
+        .brand-text span {
+            font-size: 0.72rem; color: var(--muted); font-weight: 500; letter-spacing: 0.5px;
+        }
+        .header-badge {
+            font-size: 0.7rem; font-weight: 700; letter-spacing: 1px;
+            background: rgba(108,99,255,0.15); border: 1px solid rgba(108,99,255,0.3);
+            color: var(--accent2); padding: 5px 12px; border-radius: 20px;
+        }
+
+        /* ─── SHOP SETUP BAR ─── */
+        .setup-bar {
+            max-width: 1120px; margin: 0 auto 22px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 18px 24px;
+            display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap;
+        }
+        .setup-bar .field { flex: 1; min-width: 180px; }
+        .setup-bar label {
+            display: block; font-size: 0.7rem; font-weight: 700; letter-spacing: 1px;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
+        }
+        .setup-bar input, .setup-bar select {
+            width: 100%; background: var(--card2); border: 1px solid var(--border);
+            border-radius: 10px; padding: 10px 14px; color: var(--text);
+            font-family: inherit; font-size: 0.9rem; outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .setup-bar input:focus, .setup-bar select:focus {
+            border-color: var(--accent); box-shadow: 0 0 0 3px rgba(108,99,255,0.15);
+        }
+        .setup-bar input::placeholder { color: var(--muted); }
+        .setup-bar select option { background: var(--card2); }
+
+        /* ─── GRID ─── */
+        .grid {
+            max-width: 1120px; margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1.1fr;
+            gap: 22px;
+            align-items: start;
+        }
+        @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+
+        /* ─── CARD ─── */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 26px;
+            box-shadow: var(--shadow);
+        }
+
+        .section-label {
+            font-size: 0.65rem; font-weight: 800; letter-spacing: 2px;
+            text-transform: uppercase; color: var(--accent2);
+            margin-bottom: 18px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .section-label::after {
+            content: ''; flex: 1; height: 1px;
+            background: linear-gradient(90deg, rgba(108,99,255,0.3), transparent);
+        }
+
+        /* ─── INPUTS ─── */
+        .input-group { margin-bottom: 14px; }
+        .input-group label {
+            display: block; font-size: 0.73rem; color: var(--muted); margin-bottom: 6px; font-weight: 500;
+        }
+        input[type=text], input[type=tel], input[type=email], input[type=number], select {
+            width: 100%; background: var(--card2); border: 1px solid var(--border);
+            border-radius: 10px; padding: 11px 14px; color: var(--text);
+            font-family: inherit; font-size: 0.9rem; outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            -webkit-appearance: none;
+        }
+        input:focus, select:focus {
+            border-color: var(--accent); box-shadow: 0 0 0 3px rgba(108,99,255,0.15);
+        }
+        input::placeholder { color: var(--muted); }
+        select option { background: #181d32; }
+
+        .row-2 { display: flex; gap: 10px; }
+        .row-2 .input-group { flex: 1; }
+
+        /* ─── CATEGORY PILLS ─── */
+        .cat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .cat-pill {
+            padding: 9px 6px; border-radius: 10px; font-size: 0.78rem; font-weight: 600;
+            border: 1px solid var(--border); background: var(--card2);
+            cursor: pointer; color: var(--muted); text-align: center;
+            transition: all 0.2s; user-select: none;
+        }
+        .cat-pill:hover { border-color: var(--accent); color: var(--text); background: var(--card3); }
+        .cat-pill.active {
+            background: linear-gradient(135deg, rgba(108,99,255,0.25), rgba(108,99,255,0.1));
+            border-color: var(--accent); color: #fff;
+            box-shadow: 0 2px 14px rgba(108,99,255,0.25);
+        }
+        .cat-icon { display: block; font-size: 1.3rem; margin-bottom: 4px; }
+
+        /* ─── BUTTONS ─── */
+        .btn {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            width: 100%; padding: 13px; border: none; border-radius: 11px; cursor: pointer;
+            font-family: inherit; font-size: 0.9rem; font-weight: 700;
+            transition: all 0.2s; letter-spacing: 0.2px; position: relative; overflow: hidden;
+        }
+        .btn::after {
+            content: ''; position: absolute; inset: 0;
+            background: rgba(255,255,255,0); transition: background 0.2s;
+        }
+        .btn:hover::after { background: rgba(255,255,255,0.08); }
+        .btn:active { transform: scale(0.98); }
+
+        .btn-add {
+            background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
+            color: #fff; box-shadow: 0 4px 18px rgba(108,99,255,0.4);
+            margin-top: 4px;
+        }
+
+        /* ─── BILL TABLE ─── */
+        .bill-scroll { max-height: 300px; overflow-y: auto; margin-bottom: 18px; }
+        .bill-scroll::-webkit-scrollbar { width: 4px; }
+        .bill-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        table { width: 100%; border-collapse: collapse; }
+        thead th {
+            padding: 9px 10px; font-size: 0.65rem; font-weight: 800; letter-spacing: 1.2px;
+            text-transform: uppercase; color: var(--muted);
+            border-bottom: 1px solid var(--border); text-align: left;
+        }
+        tbody tr {
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            animation: rowIn 0.22s ease;
+            transition: background 0.15s;
+        }
+        tbody tr:hover { background: rgba(255,255,255,0.025); }
+        @keyframes rowIn { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+        tbody td { padding: 10px 10px; font-size: 0.86rem; }
+        .td-name { font-weight: 600; }
+        .td-qty  { color: var(--muted); text-align: center; }
+        .td-rate { color: var(--muted); font-size: 0.8rem; }
+        .td-tot  { color: var(--green); font-weight: 700; }
+        .td-del  { text-align: center; }
+        .del-btn {
+            background: none; border: none; cursor: pointer; color: var(--muted);
+            font-size: 0.95rem; padding: 3px 7px; border-radius: 7px; transition: all 0.18s;
+        }
+        .del-btn:hover { color: var(--red); background: rgba(239,68,68,0.12); }
+
+        /* ─── EMPTY STATE ─── */
+        .empty {
+            text-align: center; padding: 44px 20px; color: var(--muted);
+        }
+        .empty-icon { font-size: 2.8rem; opacity: 0.35; margin-bottom: 12px; }
+        .empty p { font-size: 0.83rem; line-height: 1.6; }
+
+        /* ─── TOTAL BOX ─── */
+        .total-box {
+            background: linear-gradient(135deg, rgba(108,99,255,0.1), rgba(34,211,165,0.07));
+            border: 1px solid rgba(108,99,255,0.22);
+            border-radius: 13px; padding: 16px 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 16px;
+        }
+        .total-label { font-size: 0.7rem; font-weight: 800; color: var(--muted);
+            text-transform: uppercase; letter-spacing: 1.2px; }
+        .total-items { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+        .total-amt   { font-size: 2.1rem; font-weight: 900; color: var(--green); letter-spacing: -1.5px; }
+
+        /* ─── SEND BUTTONS ─── */
+        .send-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .btn-wa {
+            background: linear-gradient(135deg, #25D366, #075e54);
+            color: #fff; box-shadow: 0 4px 18px rgba(37,211,102,0.32);
+            padding: 12px;
+        }
+        .btn-email {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: #fff; box-shadow: 0 4px 18px rgba(59,130,246,0.3);
+            padding: 12px;
+        }
+        .btn-clear {
+            margin-top: 10px; padding: 10px;
+            background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25);
+            color: var(--red); font-size: 0.82rem;
+        }
+        .btn-clear:hover::after { background: rgba(239,68,68,0.06) !important; }
+
+        /* ─── CONTACT CHIPS ─── */
+        .contact-chips { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
+        .chip {
+            display: none; font-size: 0.7rem; padding: 3px 11px; border-radius: 20px;
+            align-items: center; gap: 4px; font-weight: 600;
+        }
+        .chip.on { display: inline-flex; }
+        .chip-wa    { background: rgba(37,211,102,0.12); border: 1px solid rgba(37,211,102,0.25); color: #4ade80; }
+        .chip-email { background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.25); color: #60a5fa; }
+
+        /* ─── DIVIDER ─── */
+        .divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+        /* ─── TOAST ─── */
+        .toast {
+            position: fixed; bottom: 28px; left: 50%;
+            transform: translateX(-50%) translateY(90px);
+            background: var(--card2); border: 1px solid var(--border);
+            border-radius: 13px; padding: 14px 22px;
+            font-size: 0.87rem; font-weight: 600;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+            display: flex; align-items: center; gap: 10px;
+            transition: transform 0.38s cubic-bezier(.34,1.56,.64,1), opacity 0.3s;
+            opacity: 0; z-index: 1000;
+            min-width: 240px; max-width: 400px;
+        }
+        .toast.show  { transform: translateX(-50%) translateY(0); opacity: 1; }
+        .toast.ok    { border-color: var(--green2); }
+        .toast.err   { border-color: var(--red); }
+        .toast.info  { border-color: var(--accent); }
+
+        /* ─── PDF PROGRESS ─── */
+        .pdf-overlay {
+            display: none; position: fixed; inset: 0; z-index: 500;
+            background: rgba(9,11,20,0.85); backdrop-filter: blur(6px);
+            align-items: center; justify-content: center; flex-direction: column; gap: 18px;
+        }
+        .pdf-overlay.show { display: flex; }
+        .pdf-spinner {
+            width: 50px; height: 50px; border: 4px solid rgba(108,99,255,0.2);
+            border-top-color: var(--accent); border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .pdf-msg { color: var(--text); font-weight: 600; font-size: 0.95rem; }
+
+        /* ─── BADGE ─── */
+        .badge {
+            display: inline-block; background: var(--accent); color: #fff;
+            font-size: 0.62rem; font-weight: 800; padding: 2px 8px;
+            border-radius: 20px; margin-left: 6px; vertical-align: middle;
+        }
+
+        /* ─── PROFILE INDICATOR ─── */
+        .profile-bar {
+            max-width: 1120px; margin: -10px auto 16px;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 4px;
+        }
+        .profile-saved-chip {
+            display: none; align-items: center; gap: 8px;
+            background: rgba(34,211,165,0.1); border: 1px solid rgba(34,211,165,0.3);
+            border-radius: 30px; padding: 6px 14px;
+            font-size: 0.72rem; font-weight: 700; color: var(--green);
+            cursor: pointer; transition: all 0.2s;
+            animation: chipIn 0.4s cubic-bezier(.34,1.56,.64,1);
+        }
+        .profile-saved-chip.on { display: inline-flex; }
+        .profile-saved-chip:hover { background: rgba(34,211,165,0.18); transform: scale(1.03); }
+        @keyframes chipIn { from { opacity:0; transform:scale(0.8); } to { opacity:1; transform:scale(1); } }
+        .profile-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+            box-shadow: 0 0 6px var(--green); animation: pulse 1.8s ease-in-out infinite; }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+        /* ─── PROFILE MODAL ─── */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; z-index: 800;
+            background: rgba(9,11,20,0.75); backdrop-filter: blur(8px);
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-box {
+            background: var(--card); border: 1px solid rgba(108,99,255,0.3);
+            border-radius: 22px; padding: 32px 30px 28px;
+            width: 100%; max-width: 480px; margin: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+            animation: modalIn 0.35s cubic-bezier(.34,1.56,.64,1);
+        }
+        @keyframes modalIn { from { opacity:0; transform:scale(0.9) translateY(20px); } to { opacity:1; transform:none; } }
+        .modal-header {
+            display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px;
+        }
+        .modal-title {
+            font-size: 1.1rem; font-weight: 800; color: var(--text);
+            display: flex; align-items: center; gap: 10px;
+        }
+        .modal-close {
+            background: var(--card2); border: 1px solid var(--border);
+            color: var(--muted); border-radius: 10px; padding: 5px 10px;
+            cursor: pointer; font-size: 1rem; transition: all 0.2s; line-height: 1;
+        }
+        .modal-close:hover { color: var(--red); border-color: var(--red); background: rgba(239,68,68,0.08); }
+        .modal-field { margin-bottom: 16px; }
+        .modal-field label {
+            display: block; font-size: 0.7rem; font-weight: 700; letter-spacing: 1px;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 7px;
+        }
+        .modal-field input {
+            width: 100%; background: var(--card2); border: 1px solid var(--border);
+            border-radius: 10px; padding: 11px 14px; color: var(--text);
+            font-family: inherit; font-size: 0.92rem; outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .modal-field input:focus {
+            border-color: var(--accent); box-shadow: 0 0 0 3px rgba(108,99,255,0.15);
+        }
+        .modal-field input::placeholder { color: var(--muted); }
+        .modal-btns { display: flex; gap: 10px; margin-top: 22px; }
+        .btn-save-profile {
+            flex: 2; background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            color: #fff; border: none; border-radius: 11px; padding: 12px;
+            font-family: inherit; font-size: 0.92rem; font-weight: 700;
+            cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 18px rgba(108,99,255,0.4);
+        }
+        .btn-save-profile:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-clear-profile {
+            flex: 1; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25);
+            color: var(--red); border-radius: 11px; padding: 12px;
+            font-family: inherit; font-size: 0.88rem; font-weight: 700;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .btn-clear-profile:hover { background: rgba(239,68,68,0.15); }
+        .profile-avatar {
+            width: 42px; height: 42px; border-radius: 12px;
+            background: linear-gradient(135deg, var(--accent), #22d3a5);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.3rem;
+        }
+        .autosave-note {
+            text-align: center; font-size: 0.68rem; color: var(--muted);
+            margin-top: 14px; letter-spacing: 0.3px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <header>
+        <div class="brand">
+            <img src="logo.jpg" alt="Billora Logo" class="brand-logo">
+            <div class="brand-text">
+                <h1>Billora</h1>
+                <span>Smart POS · PDF Billing</span>
+            </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;">
+            <div class="theme-toggle" onclick="toggleTheme()" title="Dark / Light mode">
+                <div class="toggle-track dark" id="toggleTrack">
+                    <div class="toggle-thumb" id="toggleThumb">🌙</div>
+                </div>
+                <span class="toggle-label" id="toggleLabel">Dark</span>
+            </div>
+            <div class="header-badge">⚡ v2.0</div>
+        </div>
+    </header>
+
+    <!-- SHOP SETUP BAR -->
+    <div class="setup-bar" id="setupBar">
+        <div class="field">
+            <label>🏪 Shop / Business Name</label>
+            <input type="text" id="shopName" placeholder="e.g. Sharma General Store" maxlength="60" oninput="autoSaveProfile()">
+        </div>
+        <div class="field">
+            <label>📍 Shop Address (optional)</label>
+            <input type="text" id="shopAddress" placeholder="e.g. Main Road, Delhi - 110001" maxlength="80" oninput="autoSaveProfile()">
+        </div>
+        <div class="field">
+            <label>📞 Shop Mobile (optional)</label>
+            <input type="tel" id="shopMobile" placeholder="e.g. 9876543210" maxlength="15" oninput="autoSaveProfile()">
+        </div>
+        <div style="display:flex;align-items:flex-end;">
+            <button class="btn" id="profileBtn" onclick="openProfileModal()"
+                style="background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);color:var(--accent2);padding:10px 16px;font-size:0.8rem;white-space:nowrap;width:auto;">
+                👤 Profile
+            </button>
+        </div>
+    </div>
+
+    <!-- PROFILE SAVED INDICATOR -->
+    <div class="profile-bar">
+        <div class="profile-saved-chip" id="profileChip" onclick="openProfileModal()" title="Profile saved – click to edit">
+            <div class="profile-dot"></div>
+            <span id="profileChipName">Profile Saved</span>
+            ✏️ Edit
+        </div>
+    </div>
+
+    <!-- MAIN GRID -->
+    <div class="grid">
+
+        <!-- ─── LEFT: Entry ─── -->
+        <div class="card">
+            <div class="section-label">👤 Customer Details</div>
+
+            <div class="input-group">
+                <label>Customer Name (optional)</label>
+                <input type="text" id="custName" placeholder="e.g. Rahul Sharma">
+            </div>
+            <div class="input-group">
+                <label>WhatsApp / Mobile Number</label>
+                <input type="tel" id="mobile" placeholder="+91 98765 43210" oninput="updateChips()">
+            </div>
+            <div class="input-group">
+                <label>Email Address</label>
+                <input type="email" id="email" placeholder="customer@email.com" oninput="updateChips()">
+            </div>
+            <div class="contact-chips">
+                <span class="chip chip-wa" id="chip-wa">📱 WhatsApp ready</span>
+                <span class="chip chip-email" id="chip-email">📧 Email ready</span>
+            </div>
+
+            <div class="divider"></div>
+            <div class="section-label">🛍 Shop Category</div>
+
+            <div class="cat-grid" id="catGrid">
+                <div class="cat-pill" onclick="selectCat('grocery',this)">
+                    <span class="cat-icon">🛒</span>Grocery
+                </div>
+                <div class="cat-pill" onclick="selectCat('electronics',this)">
+                    <span class="cat-icon">📱</span>Electronics
+                </div>
+                <div class="cat-pill" onclick="selectCat('clothing',this)">
+                    <span class="cat-icon">👕</span>Clothing
+                </div>
+                <div class="cat-pill" onclick="selectCat('pharmacy',this)">
+                    <span class="cat-icon">💊</span>Pharmacy
+                </div>
+                <div class="cat-pill" onclick="selectCat('stationery',this)">
+                    <span class="cat-icon">✏️</span>Stationery
+                </div>
+                <div class="cat-pill" onclick="selectCat('food',this)">
+                    <span class="cat-icon">🍽️</span>Restaurant
+                </div>
+                <div class="cat-pill" onclick="selectCat('hardware',this)">
+                    <span class="cat-icon">🔧</span>Hardware
+                </div>
+                <div class="cat-pill" onclick="selectCat('custom',this)">
+                    <span class="cat-icon">✍️</span>Custom
+                </div>
+            </div>
+
+            <div class="section-label">📦 Add Item</div>
+
+            <div class="input-group">
+                <label>Item Name</label>
+                <input list="itemSugg" id="itemName" oninput="fillRate()" placeholder="Search or type item...">
+                <datalist id="itemSugg"></datalist>
+            </div>
+
+            <div class="row-2">
+                <div class="input-group">
+                    <label>Rate (₹)</label>
+                    <input type="number" id="itemRate" placeholder="0.00" min="0" step="0.01">
+                </div>
+                <div class="input-group">
+                    <label>Quantity</label>
+                    <input type="number" id="itemQty" value="1" min="1">
+                </div>
+            </div>
+
+            <button class="btn btn-add" id="addBtn" onclick="addItem()">
+                ＋ &nbsp;Add to Bill
+            </button>
+        </div>
+
+        <!-- ─── RIGHT: Bill Preview ─── -->
+        <div class="card" style="display:flex;flex-direction:column;justify-content:space-between;">
+            <div>
+                <div class="section-label">
+                    🧾 Current Bill
+                    <span class="badge" id="itemCount">0</span>
+                </div>
+
+                <div class="bill-scroll">
+                    <div class="empty" id="emptyState">
+                        <div class="empty-icon">📋</div>
+                        <p>No items added yet.<br>Select a category &amp; add items.</p>
+                    </div>
+                    <table id="billTable" style="display:none">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th style="text-align:center">Qty</th>
+                                <th>Rate</th>
+                                <th>Total</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="billBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div>
+                <div class="total-box">
+                    <div>
+                        <div class="total-label">Grand Total</div>
+                        <div class="total-items" id="itemsNote">0 items</div>
+                    </div>
+                    <div class="total-amt" id="grandTotal">₹0.00</div>
+                </div>
+
+                <div class="send-grid">
+                    <button class="btn btn-wa" onclick="sendBill('whatsapp')">
+                        <svg width="17" height="17" viewBox="0 0 32 32" fill="currentColor"><path d="M16 0C7.163 0 0 7.163 0 16c0 2.817.734 5.47 2.02 7.773L.054 31.07a1 1 0 001.22 1.22l7.297-1.966A15.927 15.927 0 0016 32c8.837 0 16-7.163 16-16S24.837 0 16 0zm8.27 22.53c-.35.98-2.05 1.87-2.82 1.98-.72.1-1.63.14-2.63-.17-.61-.18-1.39-.43-2.39-.85-4.2-1.82-6.94-6.06-7.15-6.34-.21-.28-1.71-2.28-1.71-4.35 0-2.07 1.08-3.09 1.47-3.51.38-.42.83-.53 1.11-.53.28 0 .56.003.8.013.26.01.61-.1.95.73.35.84 1.19 2.91 1.3 3.12.1.21.17.46.03.74-.14.28-.21.45-.42.69-.21.24-.44.54-.63.72-.21.2-.43.41-.18.81.25.4 1.1 1.82 2.36 2.95 1.62 1.44 2.99 1.89 3.4 2.1.41.21.65.18.9-.1.24-.28 1.04-1.22 1.32-1.63.28-.41.56-.34.94-.2.38.14 2.41 1.14 2.82 1.35.41.21.69.31.79.49.1.18.1 1.04-.24 2.02z"/></svg>
+                        WhatsApp PDF
+                    </button>
+                    <button class="btn btn-email" onclick="sendBill('email')">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                        Email PDF
+                    </button>
+                </div>
+                <button class="btn btn-clear" onclick="clearBill()">
+                    🗑&nbsp; Clear Bill
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PROFILE MODAL -->
+    <div class="modal-overlay" id="profileModal" onclick="closeProfileModalOutside(event)">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <div class="profile-avatar">🏪</div>
+                    Shop Profile
+                </div>
+                <button class="modal-close" onclick="closeProfileModal()">✕</button>
+            </div>
+
+            <div class="modal-field">
+                <label>🏪 Shop / Business Name</label>
+                <input type="text" id="pm-name" placeholder="e.g. Sharma General Store" maxlength="60">
+            </div>
+            <div class="modal-field">
+                <label>📍 Shop Address</label>
+                <input type="text" id="pm-address" placeholder="e.g. Main Road, Delhi - 110001" maxlength="80">
+            </div>
+            <div class="modal-field">
+                <label>📞 Shop Mobile</label>
+                <input type="tel" id="pm-mobile" placeholder="e.g. 9876543210" maxlength="15">
+            </div>
+            <div class="modal-field">
+                <label>👤 Owner Name (optional)</label>
+                <input type="text" id="pm-owner" placeholder="e.g. Ramesh Sharma" maxlength="50">
+            </div>
+            <div class="modal-field">
+                <label>🌐 GST Number (optional)</label>
+                <input type="text" id="pm-gst" placeholder="e.g. 07AAACR5055K1Z5" maxlength="20" style="text-transform:uppercase;">
+            </div>
+
+            <div class="modal-btns">
+                <button class="btn-save-profile" onclick="saveProfile()">💾 Save Profile</button>
+                <button class="btn-clear-profile" onclick="clearProfile()">🗑 Clear</button>
+            </div>
+            <div class="autosave-note">🔒 Sab kuch sirf aapke browser mein save hota hai. Server pe kuch nahi jata.</div>
+        </div>
+    </div>
+
+    <!-- PDF Loading Overlay -->
+    <div class="pdf-overlay" id="pdfOverlay">
+        <div class="pdf-spinner"></div>
+        <div class="pdf-msg" id="pdfMsg">Generating PDF…</div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+    // ─────────────────────────────────────────────
+    //   SHOP DATABASE
+    // ─────────────────────────────────────────────
+    const DB = {
+        grocery: {
+            "Atta 5kg":70, "Rice 5kg":280, "Sugar 1kg":45, "Salt 1kg":20,
+            "Dal (Moong) 1kg":130, "Dal (Chana) 1kg":110, "Toor Dal 1kg":160,
+            "Mustard Oil 1L":180, "Refined Oil 1L":150, "Ghee 500g":320,
+            "Milk 1L":66, "Curd 400g":50, "Paneer 200g":90,
+            "Bread":40, "Biscuits (Parle-G)":20, "Tea 250g":130,
+            "Coffee 100g":120, "Maggi 70g":14, "Aata Namkeen":60,
+            "Detergent Powder 1kg":90, "Soap (Lifebuoy)":35, "Shampoo 180ml":130,
+            "Tomato 1kg":30, "Onion 1kg":25, "Potato 1kg":22, "Garlic 250g":40
+        },
+        electronics: {
+            "Charger 20W":300, "Original Charger 65W":900, "Earphones (Wired)":250,
+            "Earbuds (TWS)":1200, "USB-C Cable":150, "Micro USB Cable":80,
+            "Power Bank 10000mAh":1200, "Power Bank 20000mAh":1800,
+            "Screen Guard":100, "Phone Cover":200, "Tempered Glass":120,
+            "Mouse (Wireless)":650, "Keyboard":850, "USB Hub":450,
+            "Laptop Stand":700, "HDMI Cable":250, "Extension Board":350,
+            "WiFi Router":1800, "Smart Bulb":350, "Pendrive 32GB":400,
+            "Memory Card 64GB":550, "Data Cable Combo":180
+        },
+        clothing: {
+            "T-Shirt (Round Neck)":350, "T-Shirt (Polo)":450,
+            "Jeans (Regular)":900, "Jeans (Slim Fit)":1100,
+            "Kurti":500, "Salwar Suit":1200, "Saree":1500,
+            "Leggings":250, "Churidar":300,
+            "Formal Shirt":700, "Formal Pant":800, "Blazer":2500,
+            "Socks (3 pair)":150, "Underwear":120,
+            "Belt (Leather)":350, "Wallet":450, "Cap":200,
+            "Jacket":1800, "Sweater":800, "Hoodie":1200
+        },
+        pharmacy: {
+            "Paracetamol 500mg (strip)":30, "Ibuprofen 400mg (strip)":35,
+            "Cough Syrup 100ml":85, "Antacid Syrup":75, "ORS Sachet":15,
+            "Vitamin C 500mg":120, "Multivitamin (30 tabs)":180,
+            "Bandage (Crepe)":45, "Band-Aid Box":60, "Cotton 100g":40,
+            "Dettol 250ml":90, "Savlon 200ml":85,
+            "Hand Sanitizer 200ml":55, "Face Mask (10pcs)":80,
+            "Thermometer":220, "BP Monitor":1800,
+            "Calcium Tablet (strip)":80, "Iron Tablet (strip)":60,
+            "Eno Sachet":15, "Volini Spray":180
+        },
+        stationery: {
+            "Ball Pen (Blue)":10, "Ball Pen Pack (10)":80, "Gel Pen":20,
+            "Pencil Box":150, "A4 Notebook (200 pages)":90, "Spiral Notebook":120,
+            "Register (200 pages)":80, "Sticky Notes":60,
+            "Stapler":150, "Stapler Pins":30, "Scissors":80,
+            "Highlighter Set":120, "Marker (Permanent)":40,
+            "A4 Printing Paper (500 sheets)":350, "Envelope Pack (25)":60,
+            "Calculator":250, "Ruler 30cm":20, "Eraser":5,
+            "Drawing Book":80, "Colour Pencils Set":120
+        },
+        food: {
+            "Veg Thali":120, "Non-Veg Thali":160, "Paneer Butter Masala":180,
+            "Dal Makhani":140, "Roti (per piece)":15, "Naan":25, "Rice (plate)":60,
+            "Biryani (Veg)":150, "Biryani (Non-Veg)":200,
+            "Burger":90, "Pizza (7 inch)":200, "Sandwich":70,
+            "Cold Coffee":80, "Lassi":50, "Mango Shake":80, "Chai":20, "Coffee":40,
+            "Gulab Jamun (2pc)":40, "Ice Cream Scoop":60,
+            "Veg Fried Rice":120, "Hakka Noodles":130, "Manchurian":130
+        },
+        hardware: {
+            "Hammer":200, "Screwdriver Set":350, "Wrench Set":450,
+            "Drill Machine":1800, "Drill Bits Set":250, "Tape Measure 5m":120,
+            "Pliers":180, "Wire Cutter":150, "Level Tool":280,
+            "Nails (250g)":60, "Screws Assorted":80, "Nut Bolt Set":100,
+            "PVC Pipe 1m":80, "Elbow Fitting":25, "Tap Fitting":150,
+            "Cement 50kg":400, "Sand (per bag)":200, "Paint 1L":250,
+            "Putty 1kg":90, "Brush Set":120, "Sandpaper Pack":60
+        },
+        custom: {}
+    };
+
+    let billItems  = [];
+    let currentDB  = {};
+    let currentCat = '';
+
+    // ─────────────────────────────────────────────
+    //   CATEGORY SELECT
+    // ─────────────────────────────────────────────
+    function selectCat(cat, el) {
+        document.querySelectorAll('.cat-pill').forEach(p => p.classList.remove('active'));
+        el.classList.add('active');
+        currentCat = cat;
+        currentDB  = DB[cat] || {};
+        const dl   = document.getElementById('itemSugg');
+        dl.innerHTML = Object.keys(currentDB).map(k => `<option value="${k}">`).join('');
+        document.getElementById('itemName').value = '';
+        document.getElementById('itemRate').value = '';
+        document.getElementById('itemName').focus();
+    }
+
+    function fillRate() {
+        const n = document.getElementById('itemName').value;
+        if (currentDB[n] !== undefined)
+            document.getElementById('itemRate').value = currentDB[n];
+    }
+
+    // ─────────────────────────────────────────────
+    //   ADD / REMOVE / CLEAR
+    // ─────────────────────────────────────────────
+    function addItem() {
+        const name = document.getElementById('itemName').value.trim();
+        const rate = parseFloat(document.getElementById('itemRate').value);
+        const qty  = parseInt(document.getElementById('itemQty').value);
+
+        if (!name)               return toast('⚠️ Item ka naam likhein', 'err');
+        if (isNaN(rate)||rate<0) return toast('⚠️ Sahi rate dalein', 'err');
+        if (isNaN(qty)||qty<1)   return toast('⚠️ Valid quantity dalein', 'err');
+
+        billItems.push({ name, rate, qty, total: rate * qty });
+        document.getElementById('itemName').value = '';
+        document.getElementById('itemRate').value = '';
+        document.getElementById('itemQty').value  = '1';
+        renderBill();
+        toast(`✅ "${name}" add ho gaya`, 'ok');
+        document.getElementById('itemName').focus();
+    }
+
+    function removeItem(i) {
+        billItems.splice(i, 1);
+        renderBill();
+    }
+
+    function clearBill() {
+        if (!billItems.length) return;
+        billItems = [];
+        renderBill();
+        toast('🗑 Bill clear ho gaya', 'info');
+    }
+
+    // ─────────────────────────────────────────────
+    //   RENDER
+    // ─────────────────────────────────────────────
+    function renderBill() {
+        const tbody = document.getElementById('billBody');
+        tbody.innerHTML = '';
+        let grand = 0;
+        billItems.forEach((it, i) => {
+            grand += it.total;
+            tbody.innerHTML += `<tr>
+                <td class="td-name">${esc(it.name)}</td>
+                <td class="td-qty">${it.qty}</td>
+                <td class="td-rate">₹${it.rate.toFixed(2)}</td>
+                <td class="td-tot">₹${it.total.toFixed(2)}</td>
+                <td class="td-del"><button class="del-btn" onclick="removeItem(${i})">✕</button></td>
+            </tr>`;
+        });
+        const empty = billItems.length === 0;
+        document.getElementById('emptyState').style.display = empty ? 'block' : 'none';
+        document.getElementById('billTable').style.display  = empty ? 'none'  : 'table';
+        document.getElementById('grandTotal').textContent = `₹${grand.toFixed(2)}`;
+        document.getElementById('itemCount').textContent  = billItems.length;
+        document.getElementById('itemsNote').textContent  = `${billItems.length} item${billItems.length !== 1 ? 's' : ''}`;
+    }
+
+    function updateChips() {
+        const mob   = document.getElementById('mobile').value.trim();
+        const email = document.getElementById('email').value.trim();
+        document.getElementById('chip-wa').classList.toggle('on', mob.length >= 7);
+        document.getElementById('chip-email').classList.toggle('on', email.includes('@'));
+    }
+
+    // ─────────────────────────────────────────────
+    //   PDF GENERATION
+    // ─────────────────────────────────────────────
+    async function generatePDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'mm', format: 'a5', orientation: 'portrait' });
+        const W = doc.internal.pageSize.getWidth();
+
+        const shopName    = document.getElementById('shopName').value.trim()    || 'My Shop';
+        const shopAddr    = document.getElementById('shopAddress').value.trim() || '';
+        const shopMob     = document.getElementById('shopMobile').value.trim()  || '';
+        const custName    = document.getElementById('custName').value.trim()    || '';
+        const grand       = billItems.reduce((s, i) => s + i.total, 0);
+        const date        = new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+        const billNo      = 'BL' + Date.now().toString().slice(-6);
+
+        // ── HEADER BG ──
+        doc.setFillColor(13, 15, 26);
+        doc.rect(0, 0, W, 40, 'F');
+
+        // gradient strip (simulated)
+        doc.setFillColor(108, 99, 255);
+        doc.rect(0, 0, W, 4, 'F');
+
+        // Shop Name
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.text(shopName, W / 2, 16, { align: 'center' });
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(160, 160, 200);
+        if (shopAddr) doc.text(shopAddr, W / 2, 22, { align: 'center' });
+        if (shopMob)  doc.text('📞 ' + shopMob, W / 2, 27, { align: 'center' });
+
+        // Powered by Billora
+        doc.setFontSize(7);
+        doc.setTextColor(100, 100, 140);
+        doc.text('Powered by Billora', W / 2, 34, { align: 'center' });
+
+        // ── BILL INFO ──
+        let y = 48;
+        doc.setFillColor(24, 29, 50);
+        doc.roundedRect(8, y - 5, W - 16, 14, 3, 3, 'F');
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(168, 139, 250);
+        doc.text('BILL NO:', 12, y + 2);
+        doc.setTextColor(226, 232, 245);
+        doc.text(billNo, 32, y + 2);
+
+        doc.setTextColor(168, 139, 250);
+        doc.text('DATE:', W - 55, y + 2);
+        doc.setTextColor(226, 232, 245);
+        doc.text(date, W - 40, y + 2);
+
+        if (custName) {
+            doc.setTextColor(168, 139, 250);
+            doc.text('TO:', 12, y + 7);
+            doc.setTextColor(226, 232, 245);
+            doc.text(custName, 22, y + 7);
+        }
+
+        // ── TABLE HEADER ──
+        y = 68;
+        doc.setFillColor(108, 99, 255);
+        doc.rect(8, y, W - 16, 8, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(255, 255, 255);
+        doc.text('#', 11, y + 5.5);
+        doc.text('ITEM', 18, y + 5.5);
+        doc.text('QTY', W - 55, y + 5.5, { align: 'right' });
+        doc.text('RATE', W - 35, y + 5.5, { align: 'right' });
+        doc.text('TOTAL', W - 10, y + 5.5, { align: 'right' });
+
+        // ── TABLE ROWS ──
+        y += 10;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+
+        billItems.forEach((item, idx) => {
+            const rowBg = idx % 2 === 0 ? [20, 24, 40] : [24, 29, 50];
+            doc.setFillColor(...rowBg);
+            doc.rect(8, y - 4, W - 16, 8, 'F');
+
+            doc.setTextColor(140, 146, 176);
+            doc.text(String(idx + 1), 11, y + 1);
+
+            doc.setTextColor(226, 232, 245);
+            doc.text(item.name.length > 25 ? item.name.slice(0, 23) + '…' : item.name, 18, y + 1);
+
+            doc.setTextColor(140, 146, 176);
+            doc.text(String(item.qty), W - 55, y + 1, { align: 'right' });
+            doc.text('₹' + item.rate.toFixed(2), W - 35, y + 1, { align: 'right' });
+
+            doc.setTextColor(34, 211, 165);
+            doc.setFont('helvetica', 'bold');
+            doc.text('₹' + item.total.toFixed(2), W - 10, y + 1, { align: 'right' });
+            doc.setFont('helvetica', 'normal');
+
+            y += 8;
+            if (y > 175) {
+                doc.addPage();
+                y = 20;
+            }
+        });
+
+        // ── TOTAL BOX ──
+        y += 4;
+        doc.setFillColor(108, 99, 255);
+        doc.roundedRect(8, y, W - 16, 14, 3, 3, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(255, 255, 255);
+        doc.text('GRAND TOTAL', 14, y + 9);
+        doc.setFontSize(12);
+        doc.text('₹' + grand.toFixed(2), W - 12, y + 9, { align: 'right' });
+
+        // ── FOOTER ──
+        y += 22;
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(100, 100, 140);
+        doc.text('Thank you for shopping! 🙏  |  Generated by Billora', W / 2, y, { align: 'center' });
+
+        // Bottom accent line
+        doc.setFillColor(34, 211, 165);
+        doc.rect(0, doc.internal.pageSize.getHeight() - 2, W, 2, 'F');
+
+        return doc;
+    }
+
+    // ─────────────────────────────────────────────
+    //   SEND BILL
+    // ─────────────────────────────────────────────
+    async function sendBill(channel) {
+        if (!billItems.length) return toast('⚠️ Pehle items add karein', 'err');
+
+        const mob   = document.getElementById('mobile').value.trim();
+        const email = document.getElementById('email').value.trim();
+
+        if (channel === 'whatsapp' && !mob)
+            return toast('⚠️ WhatsApp ke liye mobile number dalein', 'err');
+        if (channel === 'email' && (!email || !email.includes('@')))
+            return toast('⚠️ Valid email address dalein', 'err');
+
+        // Show spinner
+        showOverlay('PDF ban raha hai…');
+
+        await new Promise(r => setTimeout(r, 120)); // let spinner render
+
+        let doc;
+        try { doc = await generatePDF(); }
+        catch(e) { hideOverlay(); return toast('❌ PDF error: ' + e.message, 'err'); }
+
+        const shopName  = document.getElementById('shopName').value.trim() || 'My Shop';
+        const pdfBlob   = doc.output('blob');
+        const pdfFile   = new File([pdfBlob], `Billora_Bill_${Date.now()}.pdf`, { type: 'application/pdf' });
+        const grand     = billItems.reduce((s,i) => s + i.total, 0);
+
+        if (channel === 'whatsapp') {
+            hideOverlay();
+            // ✅ DIRECTLY open wa.me — no OS share dialog, no contact save needed
+            directWA(mob, shopName, grand);
+        } else {
+            hideOverlay();
+            if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+                try {
+                    await navigator.share({
+                        title: `Bill from ${shopName}`,
+                        text: `Your bill from ${shopName}. Total: ₹${grand.toFixed(2)}`,
+                        files: [pdfFile]
+                    });
+                    toast('📧 Bill share kiya gaya!', 'ok');
+                } catch(e) {
+                    if (e.name !== 'AbortError') fallbackEmail(doc, email, shopName, grand);
+                }
+            } else {
+                fallbackEmail(doc, email, shopName, grand);
+            }
+        }
+    }
+
+    // ─── DIRECT WhatsApp (wa.me) — no contact save, no share dialog ───
+    function directWA(mob, shopName, grand) {
+        let num = mob.replace(/\D/g, '');
+        // Auto add India country code
+        if (num.length === 10)          num = '91' + num;
+        else if (num.startsWith('0'))   num = '91' + num.slice(1);
+
+        const custName = document.getElementById('custName').value.trim();
+        const date     = new Date().toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'});
+        const items    = billItems.map((i,idx) =>
+            `${idx+1}. ${i.name} ×${i.qty}  →  ₹${i.total.toFixed(2)}`
+        ).join('\n');
+
+        const msg =
+`🧾 *Bill – ${shopName}*
+📅 ${date}${custName ? `\n👤 ${custName}` : ''}
+
+${items}
+
+━━━━━━━━━━━━━━━━
+💰 *TOTAL: ₹${grand.toFixed(2)}*
+━━━━━━━━━━━━━━━━
+Thank you! 🙏 — Billora`;
+
+        // Opens WhatsApp directly to this number's chat (NO contact save needed)
+        window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank');
+        toast('📱 WhatsApp seedha khul raha hai!', 'ok');
+    }
+
+    // Keep fallbackWA as alias (used nowhere now but kept for safety)
+    function fallbackWA(doc, mob, shopName, grand) { directWA(mob, shopName, grand); }
+
+    function fallbackEmail(doc, email, shopName, grand) {
+        const date    = new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'});
+        const subject = encodeURIComponent(`Bill from ${shopName} – ₹${grand.toFixed(2)}`);
+        const body    = encodeURIComponent(
+            `Dear Customer,\n\nThank you for your purchase at ${shopName}!\n\n` +
+            billItems.map(i => `${i.name.padEnd(28)} x${i.qty}   ₹${i.total.toFixed(2)}`).join('\n') +
+            `\n\n${'─'.repeat(42)}\nGRAND TOTAL:  ₹${grand.toFixed(2)}\n${'─'.repeat(42)}\n\nDate: ${date}\n\nThank you! 🙏\n– ${shopName} via Billora`
+        );
+        // Opens default email client directly with pre-filled subject & body
+        window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_self');
+        toast('📧 Email app khul raha hai!', 'ok');
+    }
+
+    // ─────────────────────────────────────────────
+    //   HELPERS
+    // ─────────────────────────────────────────────
+    function showOverlay(msg) {
+        document.getElementById('pdfMsg').textContent = msg;
+        document.getElementById('pdfOverlay').classList.add('show');
+    }
+    function hideOverlay() {
+        document.getElementById('pdfOverlay').classList.remove('show');
+    }
+
+    let toastTimer;
+    function toast(msg, type = 'info') {
+        const t = document.getElementById('toast');
+        t.innerHTML = msg;
+        t.className = `toast ${type} show`;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+    }
+
+    function esc(s) {
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // Enter key on qty → add item
+    document.getElementById('itemQty').addEventListener('keydown', e => {
+        if (e.key === 'Enter') addItem();
+    });
+    document.getElementById('itemName').addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('itemRate').focus();
+    });
+
+    // ─────────────────────────────────────────────
+    //   DARK / LIGHT MODE TOGGLE
+    // ─────────────────────────────────────────────
+    function toggleTheme() {
+        const body  = document.body;
+        const track = document.getElementById('toggleTrack');
+        const thumb = document.getElementById('toggleThumb');
+        const label = document.getElementById('toggleLabel');
+        const isLight = body.classList.toggle('light-mode');
+        track.classList.toggle('dark', !isLight);
+        thumb.textContent = isLight ? '☀️' : '🌙';
+        label.textContent = isLight ? 'Light' : 'Dark';
+        localStorage.setItem('billora-theme', isLight ? 'light' : 'dark');
+    }
+
+    // Restore saved theme on load
+    (function() {
+        const saved = localStorage.getItem('billora-theme');
+        if (saved === 'light') {
+            document.body.classList.add('light-mode');
+            document.getElementById('toggleTrack').classList.remove('dark');
+            document.getElementById('toggleThumb').textContent = '☀️';
+            document.getElementById('toggleLabel').textContent = 'Light';
+        }
+    })();
+
+    // ─────────────────────────────────────────────
+    //   SHOP PROFILE SYSTEM
+    // ─────────────────────────────────────────────
+    const PROFILE_KEY = 'billora-shop-profile';
+
+    function loadProfile() {
+        const p = JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null');
+        if (!p) return;
+        // Fill setup bar fields
+        if (p.name)    document.getElementById('shopName').value    = p.name;
+        if (p.address) document.getElementById('shopAddress').value = p.address;
+        if (p.mobile)  document.getElementById('shopMobile').value  = p.mobile;
+        updateProfileChip(p);
+    }
+
+    function autoSaveProfile() {
+        const p = getProfileFromBar();
+        if (p.name || p.address || p.mobile) {
+            localStorage.setItem(PROFILE_KEY, JSON.stringify({
+                ...JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}'),
+                ...p
+            }));
+            updateProfileChip(JSON.parse(localStorage.getItem(PROFILE_KEY)));
+        }
+    }
+
+    function getProfileFromBar() {
+        return {
+            name:    document.getElementById('shopName').value.trim(),
+            address: document.getElementById('shopAddress').value.trim(),
+            mobile:  document.getElementById('shopMobile').value.trim()
+        };
+    }
+
+    function updateProfileChip(p) {
+        const chip = document.getElementById('profileChip');
+        const chipName = document.getElementById('profileChipName');
+        if (p && p.name) {
+            chipName.textContent = p.name;
+            chip.classList.add('on');
+        } else {
+            chip.classList.remove('on');
+        }
+    }
+
+    function openProfileModal() {
+        const p = JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}');
+        document.getElementById('pm-name').value    = p.name    || document.getElementById('shopName').value.trim();
+        document.getElementById('pm-address').value = p.address || document.getElementById('shopAddress').value.trim();
+        document.getElementById('pm-mobile').value  = p.mobile  || document.getElementById('shopMobile').value.trim();
+        document.getElementById('pm-owner').value   = p.owner   || '';
+        document.getElementById('pm-gst').value     = p.gst     || '';
+        document.getElementById('profileModal').classList.add('show');
+        document.getElementById('pm-name').focus();
+    }
+
+    function closeProfileModal() {
+        document.getElementById('profileModal').classList.remove('show');
+    }
+
+    function closeProfileModalOutside(e) {
+        if (e.target === document.getElementById('profileModal')) closeProfileModal();
+    }
+
+    function saveProfile() {
+        const p = {
+            name:    document.getElementById('pm-name').value.trim(),
+            address: document.getElementById('pm-address').value.trim(),
+            mobile:  document.getElementById('pm-mobile').value.trim(),
+            owner:   document.getElementById('pm-owner').value.trim(),
+            gst:     document.getElementById('pm-gst').value.trim().toUpperCase()
+        };
+        if (!p.name) return toast('⚠️ Shop ka naam zaroor bharo', 'err');
+        localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+        // Sync back to setup bar
+        document.getElementById('shopName').value    = p.name;
+        document.getElementById('shopAddress').value = p.address;
+        document.getElementById('shopMobile').value  = p.mobile;
+        updateProfileChip(p);
+        closeProfileModal();
+        toast('✅ Profile save ho gayi! Ab har baar auto-fill hoga 🎉', 'ok');
+    }
+
+    function clearProfile() {
+        if (!confirm('Profile clear karna chahte hain? Sab data delete ho jayega.')) return;
+        localStorage.removeItem(PROFILE_KEY);
+        document.getElementById('shopName').value    = '';
+        document.getElementById('shopAddress').value = '';
+        document.getElementById('shopMobile').value  = '';
+        ['pm-name','pm-address','pm-mobile','pm-owner','pm-gst']
+            .forEach(id => document.getElementById(id).value = '');
+        updateProfileChip({});
+        closeProfileModal();
+        toast('🗑 Profile clear ho gayi', 'info');
+    }
+
+    // Auto-load profile when page opens
+    loadProfile();
+    </script>
+</body>
+</html>

@@ -1,0 +1,2200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billora – Smart POS Billing</title>
+    <meta name="description" content="Billora – Smart billing app. Download PDF bills. Send via WhatsApp or Email.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- jsPDF for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:      #090b14;
+            --surface: #0e1120;
+            --card:    #131829;
+            --card2:   #181d32;
+            --card3:   #1d2238;
+            --border:  rgba(255,255,255,0.08);
+            --accent:  #6c63ff;
+            --accent2: #a78bfa;
+            --green:   #22d3a5;
+            --green2:  #10b981;
+            --wa:      #25D366;
+            --wa2:     #075e54;
+            --blue:    #3b82f6;
+            --blue2:   #1d4ed8;
+            --red:     #ef4444;
+            --orange:  #f59e0b;
+            --text:    #e2e8f5;
+            --muted:   #8892b0;
+            --radius:  18px;
+            --shadow:  0 8px 40px rgba(0,0,0,0.55);
+        }
+
+        /* ─── LIGHT MODE ─── */
+        body.light-mode {
+            --bg:      #f0f4ff;
+            --surface: #e8edf8;
+            --card:    #ffffff;
+            --card2:   #f5f7ff;
+            --card3:   #eef1fb;
+            --border:  rgba(0,0,0,0.09);
+            --accent:  #6c63ff;
+            --accent2: #7c3aed;
+            --green:   #059669;
+            --green2:  #10b981;
+            --text:    #1e1b4b;
+            --muted:   #6b7280;
+            --shadow:  0 8px 40px rgba(108,99,255,0.12);
+        }
+        body.light-mode {
+            background-image:
+                radial-gradient(ellipse at 15% 10%, rgba(108,99,255,0.08) 0%, transparent 55%),
+                radial-gradient(ellipse at 85% 85%, rgba(16,185,129,0.06) 0%, transparent 55%);
+        }
+        body.light-mode select option { background: #f5f7ff; color: #1e1b4b; }
+        body.light-mode .brand-text h1 {
+            background: linear-gradient(135deg, #1e1b4b 30%, var(--accent) 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        body.light-mode tbody tr:hover { background: rgba(108,99,255,0.04); }
+        body.light-mode tbody tr { border-bottom: 1px solid rgba(0,0,0,0.05); }
+        body.light-mode .pdf-overlay { background: rgba(240,244,255,0.88); }
+
+        /* ─── DARK/LIGHT TOGGLE ─── */
+        .theme-toggle {
+            display: flex; align-items: center; gap: 8px; cursor: pointer;
+        }
+        .toggle-track {
+            position: relative; width: 52px; height: 28px;
+            background: var(--card2); border: 1px solid var(--border);
+            border-radius: 14px; cursor: pointer;
+            transition: background 0.3s, border-color 0.3s;
+        }
+        .toggle-track.dark  { background: rgba(108,99,255,0.25); border-color: rgba(108,99,255,0.4); }
+        .toggle-thumb {
+            position: absolute; top: 3px; left: 3px;
+            width: 20px; height: 20px; border-radius: 50%;
+            background: var(--accent); transition: transform 0.3s cubic-bezier(.34,1.56,.64,1);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; box-shadow: 0 2px 8px rgba(108,99,255,0.5);
+        }
+        .toggle-track.dark .toggle-thumb { transform: translateX(24px); }
+        .toggle-label {
+            font-size: 0.72rem; font-weight: 700; color: var(--muted); letter-spacing: 0.5px;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 20px 16px 60px;
+            background-image:
+                radial-gradient(ellipse at 15% 10%, rgba(108,99,255,0.12) 0%, transparent 55%),
+                radial-gradient(ellipse at 85% 85%, rgba(34,211,165,0.07) 0%, transparent 55%);
+        }
+
+        /* ─── HEADER ─── */
+        header {
+            max-width: 1140px;
+            margin: 0 auto 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 4px;
+        }
+        .brand {
+            display: flex; align-items: center; gap: 14px;
+        }
+        .brand-logo {
+            width: 52px; height: 52px; border-radius: 14px;
+            object-fit: cover;
+            box-shadow: 0 4px 20px rgba(108,99,255,0.45);
+        }
+        .brand-text h1 {
+            font-size: 1.7rem; font-weight: 900; letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #fff 30%, var(--accent2) 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+            line-height: 1;
+        }
+        .brand-text span {
+            font-size: 0.72rem; color: var(--muted); font-weight: 500; letter-spacing: 0.5px;
+        }
+        .header-badge {
+            font-size: 0.7rem; font-weight: 700; letter-spacing: 1px;
+            background: rgba(108,99,255,0.15); border: 1px solid rgba(108,99,255,0.3);
+            color: var(--accent2); padding: 5px 12px; border-radius: 20px;
+        }
+
+        /* ─── SHOP SETUP BAR ─── */
+        .setup-bar {
+            max-width: 1140px; margin: 0 auto 20px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px 22px;
+            display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+        }
+        .setup-bar .field { flex: 1; min-width: 180px; }
+        .setup-bar label {
+            display: block; font-size: 0.7rem; font-weight: 700; letter-spacing: 1px;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
+        }
+        .setup-bar input, .setup-bar select {
+            width: 100%; background: var(--card2); border: 1px solid var(--border);
+            border-radius: 10px; padding: 10px 14px; color: var(--text);
+            font-family: inherit; font-size: 0.9rem; outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .setup-bar input:focus, .setup-bar select:focus {
+            border-color: var(--accent); box-shadow: 0 0 0 3px rgba(108,99,255,0.15);
+        }
+        .setup-bar input::placeholder { color: var(--muted); }
+        .setup-bar select option { background: var(--card2); }
+
+        /* ─── PROFILE BAR ─── */
+        .profile-bar {
+            max-width: 1140px; margin: -10px auto 16px;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 4px;
+        }
+        .profile-saved-chip {
+            display: none; align-items: center; gap: 8px;
+            background: rgba(34,211,165,0.1); border: 1px solid rgba(34,211,165,0.3);
+            border-radius: 30px; padding: 6px 14px;
+            font-size: 0.72rem; font-weight: 700; color: var(--green);
+            cursor: pointer; transition: all 0.2s;
+        }
+        .profile-saved-chip.on { display: inline-flex; }
+        .profile-saved-chip:hover { background: rgba(34,211,165,0.18); transform: scale(1.02); }
+        .profile-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+            box-shadow: 0 0 6px var(--green); animation: pulse 1.8s ease-in-out infinite; }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+        /* ─── GRID ─── */
+        .grid {
+            max-width: 1140px; margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1.15fr;
+            gap: 22px;
+            align-items: start;
+        }
+        @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+        /* ─── CARD ─── */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            box-shadow: var(--shadow);
+            position: relative;
+        }
+
+        .section-label {
+            font-size: 0.68rem; font-weight: 800; letter-spacing: 1.8px;
+            text-transform: uppercase; color: var(--accent2);
+            margin-bottom: 16px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .section-label::after {
+            content: ''; flex: 1; height: 1px;
+            background: linear-gradient(90deg, rgba(108,99,255,0.3), transparent);
+        }
+
+        /* ─── INPUTS ─── */
+        .input-group { margin-bottom: 14px; }
+        .input-group label {
+            display: block; font-size: 0.73rem; color: var(--muted); margin-bottom: 6px; font-weight: 600;
+        }
+        input[type=text], input[type=tel], input[type=email], input[type=number], select {
+            width: 100%; background: var(--card2); border: 1px solid var(--border);
+            border-radius: 10px; padding: 11px 14px; color: var(--text);
+            font-family: inherit; font-size: 0.9rem; outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        input:focus, select:focus {
+            border-color: var(--accent); box-shadow: 0 0 0 3px rgba(108,99,255,0.15);
+        }
+        input::placeholder { color: var(--muted); }
+        select option { background: #181d32; }
+
+        .row-2 { display: flex; gap: 10px; }
+        .row-2 .input-group { flex: 1; }
+        .row-3 { display: flex; gap: 10px; }
+        .row-3 .input-group { flex: 1; }
+
+        /* ─── CATEGORY PILLS ─── */
+        .cat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .cat-pill {
+            padding: 9px 6px; border-radius: 10px; font-size: 0.78rem; font-weight: 600;
+            border: 1px solid var(--border); background: var(--card2);
+            cursor: pointer; color: var(--muted); text-align: center;
+            transition: all 0.2s; user-select: none;
+        }
+        .cat-pill:hover { border-color: var(--accent); color: var(--text); background: var(--card3); }
+        .cat-pill.active {
+            background: linear-gradient(135deg, rgba(108,99,255,0.28), rgba(108,99,255,0.12));
+            border-color: var(--accent); color: #fff;
+            box-shadow: 0 2px 14px rgba(108,99,255,0.25);
+        }
+        .cat-icon { display: block; font-size: 1.25rem; margin-bottom: 3px; }
+
+        /* ─── QUICK ADD CHIPS BAR ─── */
+        .quick-chips-wrap {
+            margin-bottom: 14px;
+            display: none;
+        }
+        .quick-chips-title {
+            font-size: 0.68rem; font-weight: 700; color: var(--muted); margin-bottom: 6px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .quick-chips-scroll {
+            display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px;
+        }
+        .quick-chips-scroll::-webkit-scrollbar { height: 4px; }
+        .quick-chips-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        .quick-item-chip {
+            background: var(--card2); border: 1px solid var(--border);
+            padding: 5px 10px; border-radius: 8px; font-size: 0.74rem; font-weight: 600;
+            white-space: nowrap; cursor: pointer; color: var(--text);
+            transition: all 0.18s; display: inline-flex; align-items: center; gap: 5px;
+        }
+        .quick-item-chip:hover {
+            border-color: var(--green); background: rgba(34,211,165,0.08); color: var(--green);
+            transform: translateY(-1px);
+        }
+        .quick-item-chip .q-rate { color: var(--accent2); font-weight: 700; font-size: 0.7rem; }
+
+        /* ─── BUTTONS ─── */
+        .btn {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            width: 100%; padding: 12px; border: none; border-radius: 11px; cursor: pointer;
+            font-family: inherit; font-size: 0.88rem; font-weight: 700;
+            transition: all 0.2s; letter-spacing: 0.2px; position: relative; overflow: hidden;
+        }
+        .btn::after {
+            content: ''; position: absolute; inset: 0;
+            background: rgba(255,255,255,0); transition: background 0.2s;
+        }
+        .btn:hover::after { background: rgba(255,255,255,0.08); }
+        .btn:active { transform: scale(0.98); }
+
+        .btn-add {
+            background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
+            color: #fff; box-shadow: 0 4px 18px rgba(108,99,255,0.4);
+            margin-top: 4px;
+        }
+
+        /* ─── BILL TABLE ─── */
+        .bill-scroll { max-height: 250px; overflow-y: auto; margin-bottom: 12px; }
+        .bill-scroll::-webkit-scrollbar { width: 4px; }
+        .bill-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        table { width: 100%; border-collapse: collapse; }
+        thead th {
+            padding: 8px 10px; font-size: 0.65rem; font-weight: 800; letter-spacing: 1.2px;
+            text-transform: uppercase; color: var(--muted);
+            border-bottom: 1px solid var(--border); text-align: left;
+        }
+        tbody tr {
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            animation: rowIn 0.2s ease;
+            transition: background 0.15s;
+        }
+        tbody tr:hover { background: rgba(255,255,255,0.025); }
+        @keyframes rowIn { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:translateY(0); } }
+        tbody td { padding: 9px 10px; font-size: 0.86rem; }
+        .td-name { font-weight: 600; }
+        .td-qty  { color: var(--muted); text-align: center; }
+        .td-rate { color: var(--muted); font-size: 0.8rem; }
+        .td-tot  { color: var(--green); font-weight: 700; }
+        .td-del  { text-align: center; }
+        .del-btn {
+            background: none; border: none; cursor: pointer; color: var(--muted);
+            font-size: 0.95rem; padding: 2px 6px; border-radius: 6px; transition: all 0.18s;
+        }
+        .del-btn:hover { color: var(--red); background: rgba(239,68,68,0.12); }
+
+        /* ─── EMPTY STATE ─── */
+        .empty {
+            text-align: center; padding: 36px 20px; color: var(--muted);
+        }
+        .empty-icon { font-size: 2.6rem; opacity: 0.35; margin-bottom: 10px; }
+        .empty p { font-size: 0.82rem; line-height: 1.6; }
+
+        /* ─── BILL CONTROLS (Discount & GST) ─── */
+        .bill-adjust-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;
+        }
+        .discount-row {
+            display: flex; gap: 8px; align-items: flex-end;
+        }
+        .discount-row .input-group { flex: 1; margin-bottom: 0; }
+        .discount-type-btn {
+            padding: 10px 12px; border-radius: 10px; font-size: 0.82rem; font-weight: 700;
+            cursor: pointer; border: 1px solid var(--border); background: var(--card2);
+            color: var(--muted); transition: all 0.2s; white-space: nowrap;
+            font-family: inherit; height: 42px;
+        }
+        .discount-type-btn.active {
+            background: rgba(245,158,11,0.18); border-color: var(--orange); color: var(--orange);
+        }
+
+        .gst-row { display: flex; flex-direction: column; justify-content: flex-end; }
+        .gst-pills { display: flex; gap: 4px; }
+        .gst-pill {
+            flex: 1; text-align: center; padding: 9px 4px; border-radius: 8px;
+            background: var(--card2); border: 1px solid var(--border);
+            font-size: 0.72rem; font-weight: 700; color: var(--muted);
+            cursor: pointer; transition: all 0.2s; user-select: none;
+        }
+        .gst-pill:hover { border-color: var(--accent); color: var(--text); }
+        .gst-pill.active {
+            background: rgba(108,99,255,0.22); border-color: var(--accent); color: #fff;
+        }
+
+        /* ─── PAYMENT MODE & STATUS BAR ─── */
+        .pay-settings-card {
+            background: var(--card2); border: 1px solid var(--border);
+            border-radius: 12px; padding: 10px 14px; margin-bottom: 10px;
+            display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+        }
+        .pay-modes { display: flex; gap: 6px; align-items: center; }
+        .pay-pill {
+            padding: 5px 9px; border-radius: 8px; font-size: 0.72rem; font-weight: 700;
+            background: var(--card); border: 1px solid var(--border); color: var(--muted);
+            cursor: pointer; transition: all 0.18s; display: inline-flex; align-items: center; gap: 4px;
+        }
+        .pay-pill:hover { color: var(--text); border-color: var(--accent); }
+        .pay-pill.active {
+            background: rgba(16,185,129,0.15); border-color: var(--green); color: var(--green);
+        }
+
+        .pay-status-toggle {
+            display: flex; align-items: center; gap: 6px;
+        }
+        .status-pill {
+            padding: 5px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 800;
+            cursor: pointer; transition: all 0.2s; border: 1px solid transparent;
+        }
+        .status-pill.paid {
+            background: rgba(34,211,165,0.15); color: var(--green); border-color: rgba(34,211,165,0.3);
+        }
+        .status-pill.due {
+            background: rgba(239,68,68,0.15); color: var(--red); border-color: rgba(239,68,68,0.3);
+        }
+
+        /* ─── TOTAL BOX ─── */
+        .total-box {
+            background: linear-gradient(135deg, rgba(108,99,255,0.12), rgba(34,211,165,0.08));
+            border: 1px solid rgba(108,99,255,0.25);
+            border-radius: 14px; padding: 14px 18px;
+            margin-bottom: 12px;
+        }
+        .total-row {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 3px;
+        }
+        .total-row:last-child { margin-bottom: 0; }
+        .total-label { font-size: 0.7rem; font-weight: 800; color: var(--muted);
+            text-transform: uppercase; letter-spacing: 1.2px; }
+        .total-items { font-size: 0.75rem; color: var(--muted); }
+        .total-sub   { font-size: 0.9rem; font-weight: 600; color: var(--text); }
+        .total-disc  { font-size: 0.9rem; font-weight: 600; color: var(--orange); }
+        .total-gst   { font-size: 0.9rem; font-weight: 600; color: var(--accent2); }
+        .total-sep   { height: 1px; background: var(--border); margin: 7px 0; }
+        .total-amt   { font-size: 2.1rem; font-weight: 900; color: var(--green); letter-spacing: -1.5px; }
+
+        /* ─── SEND PREFERENCES BAR (WhatsApp App vs Web & Auto-Download) ─── */
+        .send-pref-bar {
+            background: var(--card2); border: 1px solid var(--border);
+            border-radius: 11px; padding: 8px 12px; margin-bottom: 10px;
+            display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+        }
+        .wa-target-group {
+            display: flex; align-items: center; gap: 6px;
+        }
+        .wa-target-label {
+            font-size: 0.7rem; font-weight: 700; color: var(--muted);
+        }
+        .wa-seg-control {
+            display: flex; background: var(--card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 2px;
+        }
+        .wa-seg-btn {
+            padding: 4px 9px; border-radius: 6px; font-size: 0.72rem; font-weight: 700;
+            background: transparent; border: none; color: var(--muted); cursor: pointer;
+            transition: all 0.2s; font-family: inherit;
+        }
+        .wa-seg-btn.active {
+            background: var(--accent); color: #fff; box-shadow: 0 2px 6px rgba(108,99,255,0.4);
+        }
+
+        .auto-dl-toggle {
+            display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none;
+        }
+        .auto-dl-checkbox {
+            position: relative; width: 34px; height: 18px; background: var(--card);
+            border: 1px solid var(--border); border-radius: 10px; transition: 0.2s;
+        }
+        .auto-dl-checkbox.on { background: var(--accent); border-color: var(--accent); }
+        .auto-dl-switch {
+            position: absolute; top: 2px; left: 2px; width: 12px; height: 12px;
+            border-radius: 50%; background: #fff; transition: 0.2s cubic-bezier(.34,1.56,.64,1);
+        }
+        .auto-dl-checkbox.on .auto-dl-switch { transform: translateX(16px); }
+        .auto-dl-label { font-size: 0.7rem; font-weight: 600; color: var(--muted); }
+
+        /* ─── ACTION BUTTONS ─── */
+        .send-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+        .send-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+        .send-grid-wa { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; margin-bottom: 8px; }
+
+        .btn-wa {
+            background: linear-gradient(135deg, #25D366, #075e54);
+            color: #fff; box-shadow: 0 4px 18px rgba(37,211,102,0.32); padding: 12px;
+        }
+        .btn-copy-wa {
+            background: var(--card2); border: 1px solid rgba(37,211,102,0.3);
+            color: #4ade80; font-size: 0.78rem; padding: 12px 8px;
+        }
+        .btn-copy-wa:hover { background: rgba(37,211,102,0.1); border-color: #25D366; }
+
+        .btn-email {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: #fff; box-shadow: 0 4px 18px rgba(59,130,246,0.3); padding: 12px;
+        }
+        .btn-download {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #fff; box-shadow: 0 4px 18px rgba(245,158,11,0.3); padding: 12px;
+        }
+        .btn-preview {
+            background: linear-gradient(135deg, #8b5cf6, #6c63ff);
+            color: #fff; box-shadow: 0 4px 18px rgba(139,92,246,0.3); padding: 10px; font-size: 0.82rem;
+        }
+        .btn-print {
+            background: rgba(255,255,255,0.07); border: 1px solid var(--border);
+            color: var(--muted); padding: 10px; font-size: 0.82rem;
+        }
+        .btn-qr {
+            background: rgba(34,211,165,0.12); border: 1px solid rgba(34,211,165,0.3);
+            color: var(--green); padding: 10px; font-size: 0.82rem;
+        }
+        .btn-qr:hover { background: rgba(34,211,165,0.22); color: #fff; }
+
+        .btn-clear {
+            padding: 9px;
+            background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25);
+            color: var(--red); font-size: 0.8rem;
+        }
+        .btn-clear:hover::after { background: rgba(239,68,68,0.06) !important; }
+
+        /* ─── CONTACT CHIPS ─── */
+        .contact-chips { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
+        .chip {
+            display: none; font-size: 0.7rem; padding: 3px 11px; border-radius: 20px;
+            align-items: center; gap: 4px; font-weight: 600;
+        }
+        .chip.on { display: inline-flex; }
+        .chip-wa    { background: rgba(37,211,102,0.12); border: 1px solid rgba(37,211,102,0.25); color: #4ade80; }
+        .chip-email { background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.25); color: #60a5fa; }
+
+        .divider { height: 1px; background: var(--border); margin: 18px 0; }
+
+        /* ─── TOAST ─── */
+        .toast {
+            position: fixed; bottom: 28px; left: 50%;
+            transform: translateX(-50%) translateY(90px);
+            background: var(--card2); border: 1px solid var(--border);
+            border-radius: 13px; padding: 14px 22px;
+            font-size: 0.87rem; font-weight: 600;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+            display: flex; align-items: center; gap: 10px;
+            transition: transform 0.38s cubic-bezier(.34,1.56,.64,1), opacity 0.3s;
+            opacity: 0; z-index: 1000;
+            min-width: 250px; max-width: 440px;
+        }
+        .toast.show  { transform: translateX(-50%) translateY(0); opacity: 1; }
+        .toast.ok    { border-color: var(--green2); }
+        .toast.err   { border-color: var(--red); }
+        .toast.info  { border-color: var(--accent); }
+
+        /* ─── PDF PROGRESS ─── */
+        .pdf-overlay {
+            display: none; position: fixed; inset: 0; z-index: 500;
+            background: rgba(9,11,20,0.85); backdrop-filter: blur(6px);
+            align-items: center; justify-content: center; flex-direction: column; gap: 18px;
+        }
+        .pdf-overlay.show { display: flex; }
+        .pdf-spinner {
+            width: 50px; height: 50px; border: 4px solid rgba(108,99,255,0.2);
+            border-top-color: var(--accent); border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .pdf-msg { color: var(--text); font-weight: 600; font-size: 0.95rem; }
+
+        .badge {
+            display: inline-block; background: var(--accent); color: #fff;
+            font-size: 0.62rem; font-weight: 800; padding: 2px 8px;
+            border-radius: 20px; margin-left: 6px; vertical-align: middle;
+        }
+
+        /* ─── MODALS ─── */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; z-index: 850;
+            background: rgba(9,11,20,0.8); backdrop-filter: blur(8px);
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-box {
+            background: var(--card); border: 1px solid rgba(108,99,255,0.3);
+            border-radius: 22px; padding: 28px 26px;
+            width: 100%; max-width: 490px; margin: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+            animation: modalIn 0.35s cubic-bezier(.34,1.56,.64,1);
+            max-height: 90vh; overflow-y: auto;
+        }
+        @keyframes modalIn { from { opacity:0; transform:scale(0.9) translateY(20px); } to { opacity:1; transform:none; } }
+        .modal-header {
+            display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;
+        }
+        .modal-title {
+            font-size: 1.1rem; font-weight: 800; color: var(--text);
+            display: flex; align-items: center; gap: 10px;
+        }
+        .modal-close {
+            background: var(--card2); border: 1px solid var(--border);
+            color: var(--muted); border-radius: 10px; padding: 5px 10px;
+            cursor: pointer; font-size: 1rem; transition: all 0.2s; line-height: 1;
+        }
+        .modal-close:hover { color: var(--red); border-color: var(--red); background: rgba(239,68,68,0.08); }
+        .modal-field { margin-bottom: 14px; }
+        .modal-field label {
+            display: block; font-size: 0.7rem; font-weight: 700; letter-spacing: 1px;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
+        }
+        .modal-field input {
+            width: 100%; background: var(--card2); border: 1px solid var(--border);
+            border-radius: 10px; padding: 11px 14px; color: var(--text);
+            font-family: inherit; font-size: 0.92rem; outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .modal-field input:focus {
+            border-color: var(--accent); box-shadow: 0 0 0 3px rgba(108,99,255,0.15);
+        }
+        .modal-field input::placeholder { color: var(--muted); }
+        .modal-btns { display: flex; gap: 10px; margin-top: 20px; }
+        .btn-save-profile {
+            flex: 2; background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            color: #fff; border: none; border-radius: 11px; padding: 12px;
+            font-family: inherit; font-size: 0.92rem; font-weight: 700;
+            cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 18px rgba(108,99,255,0.4);
+        }
+        .btn-save-profile:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-clear-profile {
+            flex: 1; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25);
+            color: var(--red); border-radius: 11px; padding: 12px;
+            font-family: inherit; font-size: 0.88rem; font-weight: 700;
+            cursor: pointer; transition: all 0.2s;
+        }
+
+        /* ─── UPI QR MODAL ─── */
+        .qr-box {
+            text-align: center; padding: 10px 0;
+        }
+        .qr-img-wrap {
+            display: inline-block; padding: 12px; background: #fff;
+            border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+            margin: 12px 0;
+        }
+        .qr-img { width: 210px; height: 210px; display: block; }
+        .qr-amount { font-size: 1.8rem; font-weight: 900; color: var(--green); margin-bottom: 4px; }
+        .qr-vpa { font-size: 0.85rem; color: var(--accent2); font-weight: 600; margin-bottom: 12px; }
+        .qr-apps-icons { display: flex; justify-content: center; gap: 8px; font-size: 0.72rem; color: var(--muted); }
+
+        /* ─── PDF PREVIEW MODAL ─── */
+        .preview-overlay {
+            display: none; position: fixed; inset: 0; z-index: 900;
+            background: rgba(9,11,20,0.92); backdrop-filter: blur(8px);
+            align-items: center; justify-content: center; flex-direction: column;
+            gap: 14px; padding: 16px;
+        }
+        .preview-overlay.show { display: flex; }
+        .preview-header {
+            display: flex; align-items: center; justify-content: space-between;
+            width: 100%; max-width: 600px;
+        }
+        .preview-title { font-size: 1rem; font-weight: 800; color: var(--text); }
+        .preview-close {
+            background: var(--card2); border: 1px solid var(--border);
+            color: var(--muted); border-radius: 10px; padding: 6px 14px;
+            cursor: pointer; font-size: 0.9rem; font-family: inherit; font-weight: 700;
+            transition: all 0.2s;
+        }
+        .preview-close:hover { color: var(--red); border-color: var(--red); }
+        .preview-frame {
+            width: 100%; max-width: 600px; height: 70vh;
+            border: none; border-radius: 14px; background: #fff;
+        }
+        .preview-actions { display: flex; gap: 10px; width: 100%; max-width: 600px; }
+        .preview-actions .btn { flex: 1; }
+
+        /* ─── BILL HISTORY ─── */
+        .history-bar {
+            max-width: 1140px; margin: 22px auto 0;
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 20px 24px;
+        }
+        .history-header {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 10px; margin-bottom: 14px;
+        }
+        .history-title {
+            font-size: 0.68rem; font-weight: 800; letter-spacing: 2px;
+            text-transform: uppercase; color: var(--accent2);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .history-actions { display: flex; gap: 8px; align-items: center; }
+        .history-search {
+            background: var(--card2); border: 1px solid var(--border);
+            border-radius: 8px; padding: 6px 10px; font-size: 0.78rem;
+            color: var(--text); outline: none; width: 180px;
+        }
+        .history-btn {
+            font-size: 0.7rem; font-weight: 700; border-radius: 8px;
+            padding: 6px 12px; cursor: pointer; font-family: inherit; transition: all 0.2s;
+            border: 1px solid var(--border); background: var(--card2); color: var(--muted);
+        }
+        .history-btn:hover { color: var(--text); border-color: var(--accent); }
+        .history-btn.danger { color: var(--red); border-color: rgba(239,68,68,0.3); }
+        .history-btn.danger:hover { background: rgba(239,68,68,0.12); }
+
+        .history-list { display: flex; gap: 10px; flex-wrap: wrap; }
+        .history-card {
+            background: var(--card2); border: 1px solid var(--border);
+            border-radius: 12px; padding: 10px 14px; font-size: 0.78rem;
+            transition: all 0.2s; display: flex; flex-direction: column; gap: 6px;
+            min-width: 210px; flex: 1; max-width: 340px;
+        }
+        .history-card:hover { border-color: var(--accent); }
+        .hc-top { display: flex; justify-content: space-between; align-items: center; }
+        .hc-name { font-weight: 700; color: var(--text); }
+        .hc-amt  { color: var(--green); font-weight: 900; font-size: 0.95rem; }
+        .hc-meta { font-size: 0.68rem; color: var(--muted); display: flex; justify-content: space-between; }
+        .hc-btns { display: flex; gap: 6px; margin-top: 4px; }
+        .hc-btn {
+            flex: 1; padding: 4px 6px; border-radius: 6px; font-size: 0.68rem; font-weight: 700;
+            background: var(--card); border: 1px solid var(--border); color: var(--muted);
+            cursor: pointer; transition: 0.15s; font-family: inherit; text-align: center;
+        }
+        .hc-btn:hover { color: var(--text); border-color: var(--accent); }
+        .hc-btn.load { color: var(--accent2); }
+
+        .history-empty { font-size: 0.8rem; color: var(--muted); padding: 10px 0; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #printArea, #printArea * { visibility: visible; }
+            #printArea { position: fixed; inset: 0; background: white; color: black;
+                font-family: 'Inter', sans-serif; padding: 30px; z-index: 9999; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <header>
+        <div class="brand">
+            <img src="logo.jpg" alt="Billora Logo" class="brand-logo" onerror="this.style.display='none'">
+            <div class="brand-text">
+                <h1>Billora</h1>
+                <span>Smart POS · PDF Billing & WhatsApp</span>
+            </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;">
+            <div class="theme-toggle" onclick="toggleTheme()" title="Dark / Light mode">
+                <div class="toggle-track dark" id="toggleTrack">
+                    <div class="toggle-thumb" id="toggleThumb">🌙</div>
+                </div>
+                <span class="toggle-label" id="toggleLabel">Dark</span>
+            </div>
+            <div class="header-badge">⚡ v3.2 PRO</div>
+        </div>
+    </header>
+
+    <!-- SHOP SETUP BAR -->
+    <div class="setup-bar" id="setupBar">
+        <div class="field">
+            <label>🏪 Shop / Business Name</label>
+            <input type="text" id="shopName" placeholder="e.g. Shree Tiles & Sanitary" maxlength="60" oninput="autoSaveProfile()">
+        </div>
+        <div class="field">
+            <label>📍 Shop Address (optional)</label>
+            <input type="text" id="shopAddress" placeholder="e.g. Bramhapuri, Maharashtra" maxlength="80" oninput="autoSaveProfile()">
+        </div>
+        <div class="field">
+            <label>📞 Shop Mobile (optional)</label>
+            <input type="tel" id="shopMobile" placeholder="e.g. 9325367464" maxlength="15" oninput="autoSaveProfile()">
+        </div>
+        <div style="display:flex;align-items:flex-end;">
+            <button class="btn" id="profileBtn" onclick="openProfileModal()"
+                style="background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);color:var(--accent2);padding:10px 16px;font-size:0.8rem;white-space:nowrap;width:auto;">
+                ⚙️ Shop Settings & UPI
+            </button>
+        </div>
+    </div>
+
+    <!-- PROFILE SAVED INDICATOR -->
+    <div class="profile-bar">
+        <div class="profile-saved-chip" id="profileChip" onclick="openProfileModal()" title="Profile saved – click to edit">
+            <div class="profile-dot"></div>
+            <span id="profileChipName">Profile Saved</span>
+            ✏️ Edit
+        </div>
+    </div>
+
+    <!-- MAIN GRID -->
+    <div class="grid">
+
+        <!-- ─── LEFT: Entry ─── -->
+        <div class="card">
+            <div class="section-label">👤 Customer Details</div>
+
+            <div class="input-group">
+                <label>Customer Name (optional)</label>
+                <input list="custHistorySugg" type="text" id="custName" placeholder="e.g. Saharsh Meshram">
+                <datalist id="custHistorySugg"></datalist>
+            </div>
+            <div class="row-2">
+                <div class="input-group">
+                    <label>WhatsApp / Mobile Number</label>
+                    <input type="tel" id="mobile" placeholder="9876543210" oninput="updateChips()">
+                </div>
+                <div class="input-group">
+                    <label>Email Address</label>
+                    <input type="email" id="email" placeholder="customer@email.com" oninput="updateChips()">
+                </div>
+            </div>
+            <div class="contact-chips">
+                <span class="chip chip-wa" id="chip-wa">📱 WhatsApp ready</span>
+                <span class="chip chip-email" id="chip-email">📧 Email ready</span>
+            </div>
+
+            <div class="divider"></div>
+            <div class="section-label">🛍 Shop Category</div>
+
+            <div class="cat-grid" id="catGrid">
+                <div class="cat-pill" onclick="selectCat('grocery',this)">
+                    <span class="cat-icon">🛒</span>Grocery
+                </div>
+                <div class="cat-pill" onclick="selectCat('electronics',this)">
+                    <span class="cat-icon">📱</span>Electronics
+                </div>
+                <div class="cat-pill" onclick="selectCat('clothing',this)">
+                    <span class="cat-icon">👕</span>Clothing
+                </div>
+                <div class="cat-pill" onclick="selectCat('pharmacy',this)">
+                    <span class="cat-icon">💊</span>Pharmacy
+                </div>
+                <div class="cat-pill" onclick="selectCat('stationery',this)">
+                    <span class="cat-icon">✏️</span>Stationery
+                </div>
+                <div class="cat-pill" onclick="selectCat('food',this)">
+                    <span class="cat-icon">🍽️</span>Restaurant
+                </div>
+                <div class="cat-pill" onclick="selectCat('hardware',this)">
+                    <span class="cat-icon">🔧</span>Hardware
+                </div>
+                <div class="cat-pill" onclick="selectCat('custom',this)">
+                    <span class="cat-icon">✍️</span>Custom
+                </div>
+            </div>
+
+            <!-- QUICK ADD CHIPS BAR -->
+            <div class="quick-chips-wrap" id="quickChipsWrap">
+                <div class="quick-chips-title">
+                    <span>⚡ Quick-Add Popular Items:</span>
+                    <span style="font-size:0.65rem;color:var(--accent2)">Click to add</span>
+                </div>
+                <div class="quick-chips-scroll" id="quickChipsScroll"></div>
+            </div>
+
+            <div class="section-label">📦 Add Item</div>
+
+            <div class="input-group">
+                <label>Item Name</label>
+                <input list="itemSugg" id="itemName" oninput="fillRate()" placeholder="Search or type item...">
+                <datalist id="itemSugg"></datalist>
+            </div>
+
+            <div class="row-2">
+                <div class="input-group">
+                    <label>Rate (₹)</label>
+                    <input type="number" id="itemRate" placeholder="0.00" min="0" step="0.01">
+                </div>
+                <div class="input-group">
+                    <label>Quantity</label>
+                    <input type="number" id="itemQty" value="1" min="1">
+                </div>
+            </div>
+
+            <button class="btn btn-add" id="addBtn" onclick="addItem()">
+                ＋ &nbsp;Add to Bill <span style="font-size:0.75rem;opacity:0.75;font-weight:normal">(Enter)</span>
+            </button>
+        </div>
+
+        <!-- ─── RIGHT: Bill Preview & Actions ─── -->
+        <div class="card" style="display:flex;flex-direction:column;justify-content:space-between;">
+            <div>
+                <div class="section-label">
+                    🧾 Current Bill
+                    <span class="badge" id="itemCount">0</span>
+                </div>
+
+                <div class="bill-scroll">
+                    <div class="empty" id="emptyState">
+                        <div class="empty-icon">📋</div>
+                        <p>No items added yet.<br>Select a category or add items above.</p>
+                    </div>
+                    <table id="billTable" style="display:none">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th style="text-align:center">Qty</th>
+                                <th>Rate</th>
+                                <th>Total</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="billBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div>
+                <!-- BILL ADJUSTMENTS: DISCOUNT & GST -->
+                <div class="bill-adjust-grid">
+                    <!-- Discount -->
+                    <div class="discount-row">
+                        <div class="input-group">
+                            <label>🎁 Discount</label>
+                            <input type="number" id="discountVal" placeholder="0" min="0" step="any" oninput="renderBill()">
+                        </div>
+                        <button class="discount-type-btn" id="discTypeBtn" onclick="toggleDiscountType()" title="Toggle % / ₹">
+                            <span id="discTypeLabel">%</span>
+                        </button>
+                    </div>
+
+                    <!-- GST / Tax Toggle -->
+                    <div class="gst-row">
+                        <label style="font-size:0.73rem;color:var(--muted);margin-bottom:6px;font-weight:600;">📊 GST Tax</label>
+                        <div class="gst-pills">
+                            <div class="gst-pill active" onclick="setGST(0, this)">0%</div>
+                            <div class="gst-pill" onclick="setGST(5, this)">5%</div>
+                            <div class="gst-pill" onclick="setGST(12, this)">12%</div>
+                            <div class="gst-pill" onclick="setGST(18, this)">18%</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PAYMENT METHOD & STATUS -->
+                <div class="pay-settings-card">
+                    <div class="pay-modes">
+                        <span style="font-size:0.68rem;font-weight:700;color:var(--muted)">Mode:</span>
+                        <div class="pay-pill active" onclick="setPayMode('Cash', this)">💵 Cash</div>
+                        <div class="pay-pill" onclick="setPayMode('UPI', this)">📱 UPI</div>
+                        <div class="pay-pill" onclick="setPayMode('Card', this)">💳 Card</div>
+                        <div class="pay-pill" onclick="setPayMode('Udhar', this)">📒 Udhar</div>
+                    </div>
+                    <div class="pay-status-toggle">
+                        <span style="font-size:0.68rem;font-weight:700;color:var(--muted)">Status:</span>
+                        <div class="status-pill paid" id="statusPill" onclick="togglePayStatus()">✅ Paid</div>
+                    </div>
+                </div>
+
+                <!-- TOTAL BOX -->
+                <div class="total-box">
+                    <div class="total-row">
+                        <span class="total-label">Subtotal</span>
+                        <span class="total-sub" id="subTotal">₹0.00</span>
+                    </div>
+                    <div class="total-row" id="discRow" style="display:none">
+                        <span class="total-label">Discount</span>
+                        <span class="total-disc" id="discAmt">-₹0.00</span>
+                    </div>
+                    <div class="total-row" id="gstRow" style="display:none">
+                        <span class="total-label" id="gstLabel">GST (18%)</span>
+                        <span class="total-gst" id="gstAmt">+₹0.00</span>
+                    </div>
+                    <div class="total-sep"></div>
+                    <div class="total-row">
+                        <div>
+                            <div class="total-label">Grand Total</div>
+                            <div class="total-items" id="itemsNote">0 items</div>
+                        </div>
+                        <div class="total-amt" id="grandTotal">₹0.00</div>
+                    </div>
+                </div>
+
+                <!-- SEND PREFERENCES BAR (WhatsApp & Email Targets + Auto-Download Toggle) -->
+                <div class="send-pref-bar">
+                    <div class="wa-target-group">
+                        <span class="wa-target-label">WhatsApp:</span>
+                        <div class="wa-seg-control">
+                            <button class="wa-seg-btn active" id="btnWaApp" onclick="setWaTarget('app')">💻 App</button>
+                            <button class="wa-seg-btn" id="btnWaWeb" onclick="setWaTarget('web')">🌐 Web</button>
+                        </div>
+                    </div>
+                    <div class="wa-target-group">
+                        <span class="wa-target-label">Email:</span>
+                        <div class="wa-seg-control">
+                            <button class="wa-seg-btn active" id="btnEmailGmail" onclick="setEmailTarget('gmail')">🌐 Gmail</button>
+                            <button class="wa-seg-btn" id="btnEmailApp" onclick="setEmailTarget('app')">📬 App</button>
+                        </div>
+                    </div>
+                    <!-- Auto-Download PDF Toggle (OFF by default as requested!) -->
+                    <div class="auto-dl-toggle" onclick="toggleAutoDL()" title="Turn on/off automatic PDF download when sending WhatsApp or Email">
+                        <div class="auto-dl-checkbox" id="autoDlBox">
+                            <div class="auto-dl-switch"></div>
+                        </div>
+                        <span class="auto-dl-label">Auto-DL: <b id="autoDlStatusText">OFF</b></span>
+                    </div>
+                </div>
+
+                <!-- PREVIEW / PRINT / UPI QR -->
+                <div class="send-grid-3">
+                    <button class="btn btn-preview" id="btnPreview" onclick="previewPDF()">👁 Preview</button>
+                    <button class="btn btn-print" onclick="printBill()">🖨 Print</button>
+                    <button class="btn btn-qr" onclick="openQRModal()" title="Show Instant UPI QR Code to Customer">⚡ Pay QR</button>
+                </div>
+
+                <!-- WHATSAPP SEND + COPY TEXT -->
+                <div class="send-grid-wa">
+                    <button class="btn btn-wa" onclick="sendBill('whatsapp')">
+                        <svg width="17" height="17" viewBox="0 0 32 32" fill="currentColor"><path d="M16 0C7.163 0 0 7.163 0 16c0 2.817.734 5.47 2.02 7.773L.054 31.07a1 1 0 001.22 1.22l7.297-1.966A15.927 15.927 0 0016 32c8.837 0 16-7.163 16-16S24.837 0 16 0zm8.27 22.53c-.35.98-2.05 1.87-2.82 1.98-.72.1-1.63.14-2.63-.17-.61-.18-1.39-.43-2.39-.85-4.2-1.82-6.94-6.06-7.15-6.34-.21-.28-1.71-2.28-1.71-4.35 0-2.07 1.08-3.09 1.47-3.51.38-.42.83-.53 1.11-.53.28 0 .56.003.8.013.26.01.61-.1.95.73.35.84 1.19 2.91 1.3 3.12.1.21.17.46.03.74-.14.28-.21.45-.42.69-.21.24-.44.54-.63.72-.21.2-.43.41-.18.81.25.4 1.1 1.82 2.36 2.95 1.62 1.44 2.99 1.89 3.4 2.1.41.21.65.18.9-.1.24-.28 1.04-1.22 1.32-1.63.28-.41.56-.34.94-.2.38.14 2.41 1.14 2.82 1.35.41.21.69.31.79.49.1.18.1 1.04-.24 2.02z"/></svg>
+                        WhatsApp Bill
+                    </button>
+                    <button class="btn btn-copy-wa" onclick="copyWABillText()" title="Copy formatted bill text to clipboard">
+                        📋 Copy Text
+                    </button>
+                </div>
+
+                <!-- EMAIL SEND + COPY EMAIL -->
+                <div class="send-grid-wa">
+                    <button class="btn btn-email" onclick="sendBill('email')">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                        Email Bill
+                    </button>
+                    <button class="btn btn-copy-wa" style="border-color:rgba(59,130,246,0.3);color:#60a5fa;" onclick="copyEmailBillText()" title="Copy formatted email text to clipboard">
+                        📋 Copy Email
+                    </button>
+                </div>
+
+                <!-- DOWNLOAD PDF & CLEAR -->
+                <div class="send-grid-2">
+                    <button class="btn btn-download" onclick="downloadPDF()">
+                        ⬇️ Download PDF
+                    </button>
+                    <button class="btn btn-clear" onclick="clearBill()" style="font-size:0.85rem;padding:12px;">🗑 Clear Bill</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BILL HISTORY -->
+    <div class="history-bar" id="historyBar">
+        <div class="history-header">
+            <div class="history-title">
+                🕒 Recent Bills History
+            </div>
+            <div class="history-actions">
+                <input type="text" class="history-search" id="historySearch" placeholder="🔍 Search customer / ID..." oninput="filterHistory()">
+                <button class="history-btn" onclick="exportHistoryCSV()">📥 Export CSV</button>
+                <button class="history-btn danger" onclick="clearHistory()">Clear All</button>
+            </div>
+        </div>
+        <div class="history-list" id="historyList">
+            <span class="history-empty">No bills yet. Create your first bill above!</span>
+        </div>
+    </div>
+
+    <!-- SHOP PROFILE & UPI MODAL -->
+    <div class="modal-overlay" id="profileModal" onclick="closeProfileModalOutside(event)">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-title">
+                    🏪 Shop Profile &amp; UPI
+                </div>
+                <button class="modal-close" onclick="closeProfileModal()">✕</button>
+            </div>
+
+            <div class="modal-field">
+                <label>🏪 Shop / Business Name</label>
+                <input type="text" id="pm-name" placeholder="e.g. Shree Tiles & Sanitary" maxlength="60">
+            </div>
+            <div class="modal-field">
+                <label>📍 Shop Address</label>
+                <input type="text" id="pm-address" placeholder="e.g. Bramhapuri, Maharashtra" maxlength="80">
+            </div>
+            <div class="modal-field">
+                <label>📞 Shop Mobile / Phone</label>
+                <input type="tel" id="pm-mobile" placeholder="e.g. 9325367464" maxlength="15">
+            </div>
+            <div class="modal-field">
+                <label>📱 Shop UPI ID (For Instant QR Code Payment)</label>
+                <input type="text" id="pm-upi" placeholder="e.g. 9325367464@ybl or shop@upi" maxlength="50">
+            </div>
+            <div class="modal-field">
+                <label>🌐 GSTIN Number (optional)</label>
+                <input type="text" id="pm-gst" placeholder="e.g. 27AAAAA0000A1Z5" maxlength="20" style="text-transform:uppercase;">
+            </div>
+            <div class="modal-field">
+                <label>🙏 Footer Thank You Message</label>
+                <input type="text" id="pm-thanks" placeholder="Thank you for shopping! 🙏" maxlength="60">
+            </div>
+
+            <div class="modal-btns">
+                <button class="btn-save-profile" onclick="saveProfile()">💾 Save Settings</button>
+                <button class="btn-clear-profile" onclick="clearProfile()">🗑 Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- UPI QR MODAL -->
+    <div class="modal-overlay" id="qrModal" onclick="closeQRModalOutside(event)">
+        <div class="modal-box" style="max-width:380px;">
+            <div class="modal-header">
+                <div class="modal-title">
+                    📱 UPI Instant Payment
+                </div>
+                <button class="modal-close" onclick="closeQRModal()">✕</button>
+            </div>
+            <div class="qr-box">
+                <div class="qr-amount" id="qrAmtDisplay">₹0.00</div>
+                <div class="qr-vpa" id="qrVpaDisplay">UPI: Set your UPI ID in Shop Settings</div>
+                <div class="qr-img-wrap">
+                    <img id="qrCodeImg" class="qr-img" alt="UPI QR Code" src="">
+                </div>
+                <p style="font-size:0.75rem;color:var(--text);font-weight:600;margin-bottom:6px;">Scan with any UPI app</p>
+                <div class="qr-apps-icons">
+                    <span>GPay</span> • <span>PhonePe</span> • <span>Paytm</span> • <span>BHIM</span> • <span>Cred</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PDF PREVIEW OVERLAY -->
+    <div class="preview-overlay" id="previewOverlay">
+        <div class="preview-header">
+            <div class="preview-title">📄 Bill PDF Preview</div>
+            <button class="preview-close" onclick="closePreview()">✕ Close</button>
+        </div>
+        <iframe class="preview-frame" id="previewFrame" title="Bill PDF Preview"></iframe>
+        <div class="preview-actions">
+            <button class="btn btn-download" onclick="downloadPDF()">⬇️ Download PDF</button>
+            <button class="btn btn-wa" onclick="sendBill('whatsapp')">WhatsApp Bill</button>
+        </div>
+    </div>
+
+    <!-- PDF Loading Overlay -->
+    <div class="pdf-overlay" id="pdfOverlay">
+        <div class="pdf-spinner"></div>
+        <div class="pdf-msg" id="pdfMsg">Processing…</div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+    // ─────────────────────────────────────────────
+    //   DATABASE WITH POPULAR ITEMS
+    // ─────────────────────────────────────────────
+    const DB = {
+        grocery: {
+            "Atta 5kg":70, "Rice 5kg":280, "Sugar 1kg":45, "Salt 1kg":20,
+            "Dal (Moong) 1kg":130, "Dal (Chana) 1kg":110, "Toor Dal 1kg":160,
+            "Mustard Oil 1L":180, "Refined Oil 1L":150, "Ghee 500g":320,
+            "Milk 1L":66, "Curd 400g":50, "Paneer 200g":90,
+            "Bread":40, "Biscuits":20, "Tea 250g":130,
+            "Coffee 100g":120, "Maggi 70g":14, "Soap":35, "Shampoo":130
+        },
+        electronics: {
+            "Charger 20W":300, "Fast Charger 65W":900, "Earphones":250,
+            "Earbuds TWS":1200, "USB Type-C Cable":150, "Power Bank 10000mAh":1200,
+            "Screen Guard":100, "Phone Cover":200, "Tempered Glass":120,
+            "Wireless Mouse":650, "Keyboard":850, "Pendrive 32GB":400, "Memory Card 64GB":550
+        },
+        clothing: {
+            "T-Shirt Round Neck":350, "Polo T-Shirt":450, "Jeans Regular":900,
+            "Jeans Slim Fit":1100, "Kurti":500, "Saree":1500, "Formal Shirt":700,
+            "Formal Pant":800, "Socks 3 pair":150, "Belt Leather":350, "Wallet":450
+        },
+        pharmacy: {
+            "Paracetamol 500mg":30, "Ibuprofen 400mg":35, "Cough Syrup 100ml":85,
+            "Antacid Syrup":75, "ORS Sachet":15, "Vitamin C 500mg":120,
+            "Bandage":45, "Band-Aid Box":60, "Dettol 250ml":90, "Hand Sanitizer":55, "Eno":15
+        },
+        stationery: {
+            "Ball Pen Blue":10, "Gel Pen":20, "Register 200pg":80,
+            "Spiral Notebook":120, "A4 Paper 500s":350, "Stapler":150,
+            "Highlighter":40, "Calculator":250, "Permanent Marker":40
+        },
+        food: {
+            "Veg Thali":120, "Paneer Butter Masala":180, "Dal Makhani":140,
+            "Roti":15, "Naan":25, "Veg Biryani":150, "Burger":90,
+            "Pizza":200, "Cold Coffee":80, "Chai":20, "Noodles":130
+        },
+        hardware: {
+            "Hammer":200, "Screwdriver Set":350, "Wrench Set":450,
+            "Tape Measure 5m":120, "Pliers":180, "PVC Pipe 1m":80,
+            "Tap Fitting":150, "Cement 50kg":400, "Paint 1L":250, "Brush Set":120
+        },
+        custom: {}
+    };
+
+    let billItems   = [];
+    let currentDB   = {};
+    let currentCat  = '';
+    let currentTaxPct = 0;
+    let paymentMode = 'Cash';
+    let isPaid      = true;
+    let autoDownloadPDF = false; // By default OFF as demanded by user!
+    let waTarget    = 'app'; // 'app' (desktop) or 'web' (single tab)
+    let emailTarget = 'gmail'; // 'gmail' (web compose) or 'app' (desktop client)
+
+    // ─────────────────────────────────────────────
+    //   INIT & LOCAL SETTINGS
+    // ─────────────────────────────────────────────
+    function initSettings() {
+        const savedTarget = localStorage.getItem('billora-wa-target');
+        if (savedTarget) setWaTarget(savedTarget, false);
+
+        const savedEmailTarget = localStorage.getItem('billora-email-target');
+        if (savedEmailTarget) setEmailTarget(savedEmailTarget, false);
+
+        const savedAutoDL = localStorage.getItem('billora-autodownload');
+        if (savedAutoDL !== null) {
+            autoDownloadPDF = savedAutoDL === 'true';
+        } else {
+            autoDownloadPDF = false; // default OFF
+        }
+        updateAutoDLUI();
+    }
+
+    function setWaTarget(target, save = true) {
+        waTarget = target;
+        document.getElementById('btnWaApp').classList.toggle('active', target === 'app');
+        document.getElementById('btnWaWeb').classList.toggle('active', target === 'web');
+        if (save) {
+            localStorage.setItem('billora-wa-target', target);
+            toast(target === 'app' ? '💻 WhatsApp App Mode set' : '🌐 WhatsApp Single-Tab Web Mode set', 'info');
+        }
+    }
+
+    function setEmailTarget(target, save = true) {
+        emailTarget = target;
+        const btnG = document.getElementById('btnEmailGmail');
+        const btnA = document.getElementById('btnEmailApp');
+        if (btnG) btnG.classList.toggle('active', target === 'gmail');
+        if (btnA) btnA.classList.toggle('active', target === 'app');
+        if (save) {
+            localStorage.setItem('billora-email-target', target);
+            toast(target === 'gmail' ? '🌐 Email Target: Gmail Web mode set' : '📬 Email Target: Mail App mode set', 'info');
+        }
+    }
+
+    function toggleAutoDL() {
+        autoDownloadPDF = !autoDownloadPDF;
+        localStorage.setItem('billora-autodownload', autoDownloadPDF);
+        updateAutoDLUI();
+        toast(autoDownloadPDF ? '✅ Auto-download PDF: ON' : 'ℹ️ Auto-download PDF: OFF (Download manually anytime)', 'info');
+    }
+
+    function updateAutoDLUI() {
+        const box = document.getElementById('autoDlBox');
+        const txt = document.getElementById('autoDlStatusText');
+        box.classList.toggle('on', autoDownloadPDF);
+        txt.textContent = autoDownloadPDF ? 'ON' : 'OFF';
+    }
+
+    // ─────────────────────────────────────────────
+    //   CATEGORY & QUICK CHIPS
+    // ─────────────────────────────────────────────
+    function selectCat(cat, el) {
+        document.querySelectorAll('.cat-pill').forEach(p => p.classList.remove('active'));
+        el.classList.add('active');
+        currentCat = cat;
+        currentDB  = DB[cat] || {};
+        const dl   = document.getElementById('itemSugg');
+        dl.innerHTML = Object.keys(currentDB).map(k => `<option value="${k}">`).join('');
+        document.getElementById('itemName').value = '';
+        document.getElementById('itemRate').value = '';
+        renderQuickChips(cat);
+        document.getElementById('itemName').focus();
+    }
+
+    function renderQuickChips(cat) {
+        const wrap = document.getElementById('quickChipsWrap');
+        const list = document.getElementById('quickChipsScroll');
+        const items = Object.entries(DB[cat] || {});
+        if (!items.length) { wrap.style.display = 'none'; return; }
+        wrap.style.display = 'block';
+        list.innerHTML = items.slice(0, 10).map(([name, rate]) =>
+            `<div class="quick-item-chip" onclick="quickAddItem('${esc(name)}', ${rate})">
+                <span>${esc(name)}</span>
+                <span class="q-rate">₹${rate}</span>
+            </div>`
+        ).join('');
+    }
+
+    function quickAddItem(name, rate) {
+        billItems.push({ name, rate, qty: 1, total: rate });
+        renderBill();
+        toast(`✅ "${name}" added!`, 'ok');
+    }
+
+    function fillRate() {
+        const n = document.getElementById('itemName').value;
+        if (currentDB[n] !== undefined)
+            document.getElementById('itemRate').value = currentDB[n];
+    }
+
+    // ─────────────────────────────────────────────
+    //   ADD / REMOVE / CLEAR ITEMS
+    // ─────────────────────────────────────────────
+    function addItem() {
+        const name = document.getElementById('itemName').value.trim();
+        const rate = parseFloat(document.getElementById('itemRate').value);
+        const qty  = parseInt(document.getElementById('itemQty').value);
+
+        if (!name)               return toast('⚠️ Item ka naam likhein', 'err');
+        if (isNaN(rate)||rate<0) return toast('⚠️ Sahi rate dalein', 'err');
+        if (isNaN(qty)||qty<1)   return toast('⚠️ Valid quantity dalein', 'err');
+
+        billItems.push({ name, rate, qty, total: rate * qty });
+        document.getElementById('itemName').value = '';
+        document.getElementById('itemRate').value = '';
+        document.getElementById('itemQty').value  = '1';
+        renderBill();
+        toast(`✅ "${name}" add ho gaya`, 'ok');
+        document.getElementById('itemName').focus();
+    }
+
+    function removeItem(i) {
+        billItems.splice(i, 1);
+        renderBill();
+    }
+
+    function clearBill() {
+        if (!billItems.length) return;
+        billItems = [];
+        renderBill();
+        toast('🗑 Bill clear ho gaya', 'info');
+    }
+
+    // ─────────────────────────────────────────────
+    //   DISCOUNT & GST & PAYMENT MODE
+    // ─────────────────────────────────────────────
+    let discountIsPercent = true;
+
+    function toggleDiscountType() {
+        discountIsPercent = !discountIsPercent;
+        document.getElementById('discTypeLabel').textContent = discountIsPercent ? '%' : '₹';
+        document.getElementById('discTypeBtn').classList.toggle('active', !discountIsPercent);
+        renderBill();
+    }
+
+    function calcDiscount(subtotal) {
+        const val = parseFloat(document.getElementById('discountVal').value) || 0;
+        if (val <= 0) return 0;
+        if (discountIsPercent) return Math.min(subtotal, (subtotal * val) / 100);
+        return Math.min(subtotal, val);
+    }
+
+    function setGST(pct, el) {
+        document.querySelectorAll('.gst-pill').forEach(p => p.classList.remove('active'));
+        el.classList.add('active');
+        currentTaxPct = pct;
+        renderBill();
+    }
+
+    function setPayMode(mode, el) {
+        document.querySelectorAll('.pay-pill').forEach(p => p.classList.remove('active'));
+        el.classList.add('active');
+        paymentMode = mode;
+    }
+
+    function togglePayStatus() {
+        isPaid = !isPaid;
+        const pill = document.getElementById('statusPill');
+        if (isPaid) {
+            pill.className = 'status-pill paid';
+            pill.textContent = '✅ Paid';
+        } else {
+            pill.className = 'status-pill due';
+            pill.textContent = '⏳ Due (Pending)';
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    //   RENDER BILL
+    // ─────────────────────────────────────────────
+    function renderBill() {
+        const tbody = document.getElementById('billBody');
+        tbody.innerHTML = '';
+        let sub = 0;
+        billItems.forEach((it, i) => {
+            sub += it.total;
+            tbody.innerHTML += `<tr>
+                <td class="td-name">${esc(it.name)}</td>
+                <td class="td-qty">${it.qty}</td>
+                <td class="td-rate">₹${it.rate.toFixed(2)}</td>
+                <td class="td-tot">₹${it.total.toFixed(2)}</td>
+                <td class="td-del"><button class="del-btn" onclick="removeItem(${i})">✕</button></td>
+            </tr>`;
+        });
+
+        const disc  = calcDiscount(sub);
+        const taxable = sub - disc;
+        const taxAmt = currentTaxPct > 0 ? (taxable * currentTaxPct / 100) : 0;
+        const grand = taxable + taxAmt;
+        const empty = billItems.length === 0;
+
+        document.getElementById('emptyState').style.display = empty ? 'block' : 'none';
+        document.getElementById('billTable').style.display  = empty ? 'none'  : 'table';
+
+        const subEl = document.getElementById('subTotal');
+        if (subEl) subEl.textContent = '₹' + sub.toFixed(2);
+        document.getElementById('grandTotal').textContent = '₹' + grand.toFixed(2);
+        document.getElementById('itemCount').textContent  = billItems.length;
+        document.getElementById('itemsNote').textContent  = billItems.length + ' item' + (billItems.length !== 1 ? 's' : '');
+
+        const discRow = document.getElementById('discRow');
+        const discAmt = document.getElementById('discAmt');
+        if (discRow && discAmt) {
+            if (disc > 0) { discAmt.textContent = '-₹' + disc.toFixed(2); discRow.style.display = 'flex'; }
+            else { discRow.style.display = 'none'; }
+        }
+
+        const gstRow = document.getElementById('gstRow');
+        const gstAmt = document.getElementById('gstAmt');
+        const gstLabel = document.getElementById('gstLabel');
+        if (gstRow && gstAmt) {
+            if (currentTaxPct > 0) {
+                gstLabel.textContent = `GST (${currentTaxPct}%)`;
+                gstAmt.textContent = '+₹' + taxAmt.toFixed(2);
+                gstRow.style.display = 'flex';
+            } else {
+                gstRow.style.display = 'none';
+            }
+        }
+    }
+
+    function updateChips() {
+        const mob   = document.getElementById('mobile').value.trim();
+        const email = document.getElementById('email').value.trim();
+        document.getElementById('chip-wa').classList.toggle('on', mob.length >= 7);
+        document.getElementById('chip-email').classList.toggle('on', email.includes('@'));
+    }
+
+    // ─────────────────────────────────────────────
+    //   PDF GENERATION
+    // ─────────────────────────────────────────────
+    async function generatePDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'mm', format: 'a5', orientation: 'portrait' });
+        const W = doc.internal.pageSize.getWidth();
+
+        const profile     = JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}');
+        const shopName    = document.getElementById('shopName').value.trim()    || profile.name || 'My Shop';
+        const shopAddr    = document.getElementById('shopAddress').value.trim() || profile.address || '';
+        const shopMob     = document.getElementById('shopMobile').value.trim()  || profile.mobile || '';
+        const gstNo       = profile.gst || '';
+        const custName    = document.getElementById('custName').value.trim()    || '';
+        const sub         = billItems.reduce((s, i) => s + i.total, 0);
+        const disc        = calcDiscount(sub);
+        const taxable     = sub - disc;
+        const taxAmt      = currentTaxPct > 0 ? (taxable * currentTaxPct / 100) : 0;
+        const grand       = taxable + taxAmt;
+        const date        = new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+        const billNo      = 'BL' + Date.now().toString().slice(-6);
+
+        // Header BG
+        doc.setFillColor(13, 15, 26);
+        doc.rect(0, 0, W, 42, 'F');
+
+        // Accent strip
+        doc.setFillColor(108, 99, 255);
+        doc.rect(0, 0, W, 4, 'F');
+
+        // Shop Name
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(17);
+        doc.text(shopName, W / 2, 16, { align: 'center' });
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(170, 175, 210);
+        let headerY = 22;
+        if (shopAddr) { doc.text(shopAddr, W / 2, headerY, { align: 'center' }); headerY += 5; }
+        const subLine = [];
+        if (shopMob) subLine.push('Tel: ' + shopMob);
+        if (gstNo)   subLine.push('GSTIN: ' + gstNo);
+        if (subLine.length) { doc.text(subLine.join(' | '), W / 2, headerY, { align: 'center' }); headerY += 5; }
+
+        doc.setFontSize(7);
+        doc.setTextColor(110, 115, 150);
+        doc.text('Smart Tax Invoice · Powered by Billora', W / 2, headerY, { align: 'center' });
+
+        // Bill Info Box
+        let y = 50;
+        doc.setFillColor(24, 29, 50);
+        doc.roundedRect(8, y - 5, W - 16, 16, 3, 3, 'F');
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(168, 139, 250);
+        doc.text('INVOICE NO:', 12, y + 1);
+        doc.setTextColor(226, 232, 245);
+        doc.text(billNo, 36, y + 1);
+
+        doc.setTextColor(168, 139, 250);
+        doc.text('DATE:', W - 50, y + 1);
+        doc.setTextColor(226, 232, 245);
+        doc.text(date, W - 36, y + 1);
+
+        doc.setTextColor(168, 139, 250);
+        doc.text('TO:', 12, y + 7);
+        doc.setTextColor(226, 232, 245);
+        doc.text(custName || 'Walk-in Customer', 22, y + 7);
+
+        doc.setTextColor(168, 139, 250);
+        doc.text('MODE:', W - 50, y + 7);
+        doc.setTextColor(isPaid ? 34 : 239, isPaid ? 211 : 68, isPaid ? 165 : 68);
+        doc.text(paymentMode + (isPaid ? ' (PAID)' : ' (DUE)'), W - 36, y + 7);
+
+        // Table Header
+        y = 70;
+        doc.setFillColor(108, 99, 255);
+        doc.rect(8, y, W - 16, 8, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(255, 255, 255);
+        doc.text('#', 11, y + 5.5);
+        doc.text('ITEM', 18, y + 5.5);
+        doc.text('QTY', W - 55, y + 5.5, { align: 'right' });
+        doc.text('RATE', W - 35, y + 5.5, { align: 'right' });
+        doc.text('TOTAL', W - 10, y + 5.5, { align: 'right' });
+
+        // Table Rows
+        y += 10;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+
+        billItems.forEach((item, idx) => {
+            const rowBg = idx % 2 === 0 ? [20, 24, 40] : [24, 29, 50];
+            doc.setFillColor(...rowBg);
+            doc.rect(8, y - 4, W - 16, 8, 'F');
+
+            doc.setTextColor(140, 146, 176);
+            doc.text(String(idx + 1), 11, y + 1);
+
+            doc.setTextColor(226, 232, 245);
+            doc.text(item.name.length > 25 ? item.name.slice(0, 23) + '…' : item.name, 18, y + 1);
+
+            doc.setTextColor(140, 146, 176);
+            doc.text(String(item.qty), W - 55, y + 1, { align: 'right' });
+            doc.text('Rs.' + item.rate.toFixed(2), W - 35, y + 1, { align: 'right' });
+
+            doc.setTextColor(34, 211, 165);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Rs.' + item.total.toFixed(2), W - 10, y + 1, { align: 'right' });
+            doc.setFont('helvetica', 'normal');
+
+            y += 8;
+            if (y > 165) {
+                doc.addPage();
+                y = 20;
+            }
+        });
+
+        // Totals Box
+        y += 4;
+        doc.setFillColor(108, 99, 255);
+        doc.roundedRect(8, y, W - 16, 16, 3, 3, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(255, 255, 255);
+        doc.text('GRAND TOTAL (' + (isPaid ? 'PAID' : 'DUE') + ')', 14, y + 10);
+        doc.setFontSize(12);
+        doc.text('Rs.' + grand.toFixed(2), W - 12, y + 10, { align: 'right' });
+
+        // Footer
+        y += 24;
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(100, 100, 140);
+        doc.text(profile.thanks || 'Thank you for shopping with us! 🙏', W / 2, y, { align: 'center' });
+
+        // Bottom green line
+        doc.setFillColor(34, 211, 165);
+        doc.rect(0, doc.internal.pageSize.getHeight() - 2, W, 2, 'F');
+
+        return doc;
+    }
+
+    // ─────────────────────────────────────────────
+    //   DOWNLOAD / PREVIEW / PRINT
+    // ─────────────────────────────────────────────
+    async function downloadPDF() {
+        if (!billItems.length) return toast('⚠️ Pehle items add karein', 'err');
+        showOverlay('PDF download ho raha hai…');
+        await new Promise(r => setTimeout(r, 120));
+        try {
+            const doc = await generatePDF();
+            const shopName = document.getElementById('shopName').value.trim() || 'Bill';
+            doc.save(shopName.replace(/\s+/g,'_') + '_' + Date.now() + '.pdf');
+            hideOverlay();
+            saveBillToHistory();
+            toast('✅ PDF successfully downloaded!', 'ok');
+        } catch(e) { hideOverlay(); toast('❌ PDF error: ' + e.message, 'err'); }
+    }
+
+    async function previewPDF() {
+        if (!billItems.length) return toast('⚠️ Pehle items add karein', 'err');
+        showOverlay('Preview ban raha hai…');
+        await new Promise(r => setTimeout(r, 120));
+        try {
+            const doc = await generatePDF();
+            hideOverlay();
+            document.getElementById('previewFrame').src = doc.output('bloburl');
+            document.getElementById('previewOverlay').classList.add('show');
+        } catch(e) { hideOverlay(); toast('❌ Preview error: ' + e.message, 'err'); }
+    }
+
+    function closePreview() {
+        document.getElementById('previewOverlay').classList.remove('show');
+        document.getElementById('previewFrame').src = '';
+    }
+
+    function printBill() {
+        if (!billItems.length) return toast('⚠️ Pehle items add karein', 'err');
+        const shopName  = document.getElementById('shopName').value.trim() || 'My Shop';
+        const shopAddr  = document.getElementById('shopAddress').value.trim();
+        const shopMob   = document.getElementById('shopMobile').value.trim();
+        const custName  = document.getElementById('custName').value.trim();
+        const sub       = billItems.reduce((s, i) => s + i.total, 0);
+        const disc      = calcDiscount(sub);
+        const taxable   = sub - disc;
+        const taxAmt    = currentTaxPct > 0 ? (taxable * currentTaxPct / 100) : 0;
+        const grand     = taxable + taxAmt;
+        const date      = new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'});
+        const billNo    = 'BL' + Date.now().toString().slice(-6);
+        const profile   = JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}');
+        const thanksMsg = profile.thanks || 'Thank you for shopping! 🙏';
+
+        const rows = billItems.map((it,i)=>`<tr><td>${i+1}</td><td>${it.name}</td><td style="text-align:center">${it.qty}</td><td style="text-align:right">Rs.${it.rate.toFixed(2)}</td><td style="text-align:right">Rs.${it.total.toFixed(2)}</td></tr>`).join('');
+        let extraRows = '';
+        if (disc > 0) extraRows += `<tr><td colspan="4" style="text-align:right;color:#666">Discount</td><td style="text-align:right;color:#d97706">-Rs.${disc.toFixed(2)}</td></tr>`;
+        if (currentTaxPct > 0) extraRows += `<tr><td colspan="4" style="text-align:right;color:#666">GST (${currentTaxPct}%)</td><td style="text-align:right">+Rs.${taxAmt.toFixed(2)}</td></tr>`;
+
+        const html = `<style>body{font-family:Arial,sans-serif;padding:24px;}h2{text-align:center;margin-bottom:4px;}table{width:100%;border-collapse:collapse;margin:14px 0;}th{background:#6c63ff;color:#fff;padding:8px;font-size:12px;}td{padding:7px 8px;border-bottom:1px solid #eee;font-size:12px;}.grand td{font-weight:bold;background:#f0eeff;font-size:13px;}.footer{text-align:center;margin-top:20px;font-size:11px;color:#777;border-top:1px dashed #ccc;padding-top:12px;}.meta{display:flex;justify-content:space-between;margin-bottom:10px;font-size:11px;color:#555;}` + '<' + `/style><h2>${shopName}</h2><div style="text-align:center;font-size:11px;color:#666;margin-bottom:12px;">${shopAddr}${shopAddr&&shopMob?' | ':''}${shopMob?'Tel: '+shopMob:''}</div><div class="meta"><span><b>Bill No:</b> ${billNo}</span><span><b>Date:</b> ${date}</span><span><b>Mode:</b> ${paymentMode} (${isPaid?'PAID':'DUE'})</span>${custName?`<span><b>Customer:</b> ${custName}</span>`:''}</div><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th>Rate</th><th>Total</th></tr></thead><tbody>${rows}${extraRows}</tbody><tfoot class="grand"><tr><td colspan="4" style="text-align:right">GRAND TOTAL</td><td style="text-align:right">Rs.${grand.toFixed(2)}</td></tr></tfoot></table><div class="footer">${thanksMsg}<br>Generated via Billora Smart POS</div>`;
+        const pw = window.open('','billora_print_window');
+        pw.document.write('<!DOCTYPE html><html><head><title>Print Bill - ' + billNo + '<' + '/title><' + '/head><body>' + html + '<' + '/body><' + '/html>');
+        pw.document.close(); pw.focus();
+        setTimeout(()=>{ pw.print(); }, 400);
+        saveBillToHistory();
+        toast('🖨 Print window opened!', 'ok');
+    }
+
+    // ─────────────────────────────────────────────
+    //   BILL TEXT COMPOSER (CLEAN EMOJIS, NO CORRUPTION)
+    // ─────────────────────────────────────────────
+    function buildBillText(billNo, grand, sub, disc, taxAmt, pdfLink = null) {
+        const shopName = document.getElementById('shopName').value.trim() || 'My Shop';
+        const shopAddr = document.getElementById('shopAddress').value.trim();
+        const shopMob  = document.getElementById('shopMobile').value.trim();
+        const custName = document.getElementById('custName').value.trim();
+        const date     = new Date().toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'});
+        const profile  = JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}');
+
+        let msg = `🧾 *INVOICE: ${billNo}*\n`;
+        msg += `🏪 *${shopName}*\n`;
+        if (shopAddr || shopMob) {
+            const meta = [];
+            if (shopAddr) meta.push(shopAddr);
+            if (shopMob)  meta.push('📞 ' + shopMob);
+            msg += `📍 ${meta.join(' | ')}\n`;
+        }
+        msg += `📅 Date: ${date}\n`;
+        if (custName) msg += `👤 Customer: ${custName}\n`;
+        msg += `💳 Payment: ${paymentMode} (${isPaid ? 'PAID ✅' : 'DUE ⏳'})\n`;
+        msg += `────────────────────────────\n`;
+        msg += `🛒 *BILL ITEMS:*\n`;
+        billItems.forEach((item, idx) => {
+            msg += `${idx + 1}. ${item.name} × ${item.qty} = ₹${item.total.toFixed(2)}\n`;
+        });
+        msg += `────────────────────────────\n`;
+        if (disc > 0) msg += `Subtotal: ₹${sub.toFixed(2)}\nDiscount: -₹${disc.toFixed(2)}\n`;
+        if (currentTaxPct > 0) msg += `GST (${currentTaxPct}%): +₹${taxAmt.toFixed(2)}\n`;
+        msg += `💰 *GRAND TOTAL: ₹${grand.toFixed(2)}*\n`;
+        msg += `────────────────────────────\n`;
+        if (pdfLink) {
+            msg += `📄 *Download / View Official PDF Bill:*\n👉 ${pdfLink}\n`;
+            msg += `────────────────────────────\n`;
+        }
+        msg += `🙏 ${profile.thanks || 'Thank you for shopping with us!'}\n`;
+        msg += `⚡ Generated by Billora`;
+        return msg;
+    }
+
+    // ─────────────────────────────────────────────
+    //   ONLINE PDF CLOUD UPLOAD (Gofile & Fallback)
+    // ─────────────────────────────────────────────
+    async function uploadPDFToCloud(blob, fileName) {
+        // Gofile Upload (Direct link for customer download page)
+        try {
+            const sRes = await fetch('https://api.gofile.io/servers', { signal: AbortSignal.timeout(4500) });
+            if (sRes.ok) {
+                const sData = await sRes.json();
+                const server = sData?.data?.servers?.[0]?.name;
+                if (server) {
+                    const fd = new FormData();
+                    fd.append('file', blob, fileName);
+                    const uRes = await fetch(`https://${server}.gofile.io/contents/uploadfile`, {
+                        method: 'POST',
+                        body: fd,
+                        signal: AbortSignal.timeout(8000)
+                    });
+                    if (uRes.ok) {
+                        const uData = await uRes.json();
+                        const link = uData?.data?.downloadPage;
+                        if (link) return link;
+                    }
+                }
+            }
+        } catch(err) {
+            console.warn('Gofile upload error:', err);
+        }
+
+        // Fast Fallback: tmpfiles.org
+        try {
+            const fd2 = new FormData();
+            fd2.append('file', blob, fileName);
+            const tRes = await fetch('https://tmpfiles.org/api/v1/upload', {
+                method: 'POST',
+                body: fd2,
+                signal: AbortSignal.timeout(6000)
+            });
+            if (tRes.ok) {
+                const tData = await tRes.json();
+                const rawUrl = tData?.data?.url;
+                if (rawUrl) {
+                    return rawUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+                }
+            }
+        } catch(err2) {
+            console.warn('Fallback cloud upload error:', err2);
+        }
+
+        return null;
+    }
+
+    // ─────────────────────────────────────────────
+    //   SEND BILL (WHATSAPP & EMAIL)
+    // ─────────────────────────────────────────────
+    async function sendBill(channel) {
+        if (!billItems.length) return toast('⚠️ Pehle items add karein', 'err');
+        const mob   = document.getElementById('mobile').value.trim();
+        let email   = document.getElementById('email').value.trim();
+
+        if (channel === 'whatsapp' && !mob) return toast('⚠️ WhatsApp ke liye mobile number dalein', 'err');
+        if (channel === 'email' && (!email || !email.includes('@'))) {
+            const prompted = prompt('Customer ka Email address dalein (e.g. customer@gmail.com):', email || '');
+            if (prompted && prompted.includes('@')) {
+                email = prompted.trim();
+                document.getElementById('email').value = email;
+                updateChips();
+            } else {
+                document.getElementById('email').focus();
+                return toast('⚠️ Kripya customer ka sahi Email address dalein', 'err');
+            }
+        }
+
+        const shopName = document.getElementById('shopName').value.trim() || 'My Shop';
+        const sub      = billItems.reduce((s,i) => s + i.total, 0);
+        const disc     = calcDiscount(sub);
+        const taxable  = sub - disc;
+        const taxAmt   = currentTaxPct > 0 ? (taxable * currentTaxPct / 100) : 0;
+        const grand    = taxable + taxAmt;
+        const billNo   = 'BL' + Date.now().toString().slice(-6);
+
+        saveBillToHistory();
+
+        showOverlay('📄 Online PDF Link ban raha hai…');
+        let pdfLink = null;
+        try {
+            const doc = await generatePDF();
+            const safeName = shopName.replace(/\s+/g,'_');
+            const fileName = safeName + '_Bill_' + billNo + '.pdf';
+            const pdfBlob  = doc.output('blob');
+
+            // If user enabled auto local download
+            if (autoDownloadPDF) {
+                try { doc.save(fileName); } catch(e){}
+            }
+
+            pdfLink = await uploadPDFToCloud(pdfBlob, fileName);
+        } catch(e) {
+            console.warn('PDF cloud link generation error:', e);
+        }
+        hideOverlay();
+
+        if (channel === 'whatsapp') {
+            sendWhatsAppBill(mob, billNo, grand, sub, disc, taxAmt, pdfLink);
+        } else {
+            sendEmailBill(email, shopName, billNo, grand, sub, disc, taxAmt, pdfLink);
+        }
+    }
+
+    function sendWhatsAppBill(mob, billNo, grand, sub, disc, taxAmt, pdfLink = null) {
+        let num = mob.replace(/\D/g,'');
+        if (num.length === 10) num = '91' + num;
+        else if (num.startsWith('0')) num = '91' + num.slice(1);
+
+        const msg = buildBillText(billNo, grand, sub, disc, taxAmt, pdfLink);
+        const encodedText = encodeURIComponent(msg);
+
+        if (waTarget === 'app') {
+            // WHATSAPP DESKTOP APP: Opens native Windows WhatsApp app directly!
+            const appUrl = `whatsapp://send?phone=${num}&text=${encodedText}`;
+            const link = document.createElement('a');
+            link.href = appUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            toast(pdfLink ? '💻 WhatsApp App khul raha hai! (PDF Link added 🎉)' : '💻 WhatsApp Desktop App khul raha hai!', 'ok');
+        } else {
+            // WHATSAPP WEB: Directly open web.whatsapp.com in a single dedicated reused tab!
+            const webUrl = `https://web.whatsapp.com/send?phone=${num}&text=${encodedText}`;
+            const waWin = window.open(webUrl, 'billora_wa_single_tab');
+            if (waWin) waWin.focus();
+            toast(pdfLink ? '🌐 WhatsApp Web khul raha hai! (PDF Link added 🎉)' : '🌐 WhatsApp Web tab khul raha hai (single tab)!', 'ok');
+        }
+    }
+
+    function copyWABillText() {
+        if (!billItems.length) return toast('⚠️ Pehle items add karein', 'err');
+        const sub     = billItems.reduce((s,i) => s + i.total, 0);
+        const disc    = calcDiscount(sub);
+        const taxable = sub - disc;
+        const taxAmt  = currentTaxPct > 0 ? (taxable * currentTaxPct / 100) : 0;
+        const grand   = taxable + taxAmt;
+        const billNo  = 'BL' + Date.now().toString().slice(-6);
+
+        const msg = buildBillText(billNo, grand, sub, disc, taxAmt, null);
+        navigator.clipboard.writeText(msg).then(() => {
+            toast('📋 WhatsApp text copied to clipboard! Kahin bhi paste karein.', 'ok');
+        }).catch(() => {
+            toast('❌ Copy failed. Check browser permissions.', 'err');
+        });
+    }
+
+    function sendEmailBill(email, shopName, billNo, grand, sub, disc, taxAmt, pdfLink = null) {
+        const date     = new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+        const subjText = `Invoice: ${billNo} from ${shopName} - Rs.${grand.toFixed(2)}`;
+        const subj     = encodeURIComponent(subjText);
+
+        let bodyText = `Dear Customer,\n\nThank you for shopping at ${shopName}!\n\nHere is your invoice summary:\n`;
+        bodyText += `Invoice No: ${billNo}\nDate: ${date}\nPayment Mode: ${paymentMode} (${isPaid ? 'PAID' : 'DUE'})\n\n`;
+        bodyText += `ITEMS:\n`;
+        billItems.forEach((it, i) => {
+            bodyText += `${i+1}. ${it.name} x ${it.qty} = Rs.${it.total.toFixed(2)}\n`;
+        });
+        bodyText += `\nSubtotal: Rs.${sub.toFixed(2)}\n`;
+        if (disc > 0) bodyText += `Discount: -Rs.${disc.toFixed(2)}\n`;
+        if (currentTaxPct > 0) bodyText += `GST (${currentTaxPct}%): +Rs.${taxAmt.toFixed(2)}\n`;
+        bodyText += `GRAND TOTAL: Rs.${grand.toFixed(2)}\n\n`;
+        if (pdfLink) {
+            bodyText += `📄 Download Official PDF Bill:\n👉 ${pdfLink}\n\n`;
+        }
+        bodyText += `Thank you!\n${shopName}\nGenerated via Billora Smart POS`;
+
+        // Copy text to clipboard as guaranteed backup
+        try {
+            navigator.clipboard.writeText(`To: ${email}\nSubject: ${subjText}\n\n${bodyText}`);
+        } catch(e){}
+
+        if (emailTarget === 'gmail') {
+            // GMAIL WEB: Works 100% in Chrome on any Windows PC without needing Outlook installed!
+            const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${subj}&body=${encodeURIComponent(bodyText)}`;
+            const mailWin = window.open(gmailUrl, 'billora_email_tab');
+            if (mailWin) mailWin.focus();
+            toast('🌐 Gmail Compose khul raha hai! (Bill details filled 🎉)', 'ok');
+        } else {
+            // DEFAULT DESKTOP MAIL APP: via DOM click
+            const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${subj}&body=${encodeURIComponent(bodyText)}`;
+            const link = document.createElement('a');
+            link.href = mailtoUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            toast('📬 Desktop Mail client trigger ho gaya!', 'ok');
+        }
+    }
+
+    function copyEmailBillText() {
+        if (!billItems.length) return toast('⚠️ Pehle items add karein', 'err');
+        const email   = document.getElementById('email').value.trim() || 'customer@email.com';
+        const shopName= document.getElementById('shopName').value.trim() || 'My Shop';
+        const sub     = billItems.reduce((s,i) => s + i.total, 0);
+        const disc    = calcDiscount(sub);
+        const taxable = sub - disc;
+        const taxAmt  = currentTaxPct > 0 ? (taxable * currentTaxPct / 100) : 0;
+        const grand   = taxable + taxAmt;
+        const billNo  = 'BL' + Date.now().toString().slice(-6);
+        const date    = new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+
+        let text = `To: ${email}\nSubject: Invoice: ${billNo} from ${shopName} - Rs.${grand.toFixed(2)}\n\n`;
+        text += `Dear Customer,\n\nThank you for shopping at ${shopName}!\n\nInvoice No: ${billNo}\nDate: ${date}\nPayment Mode: ${paymentMode} (${isPaid ? 'PAID' : 'DUE'})\n\nITEMS:\n`;
+        billItems.forEach((it, i) => { text += `${i+1}. ${it.name} x ${it.qty} = Rs.${it.total.toFixed(2)}\n`; });
+        text += `\nSubtotal: Rs.${sub.toFixed(2)}\n`;
+        if (disc > 0) text += `Discount: -Rs.${disc.toFixed(2)}\n`;
+        if (currentTaxPct > 0) text += `GST (${currentTaxPct}%): +Rs.${taxAmt.toFixed(2)}\n`;
+        text += `GRAND TOTAL: Rs.${grand.toFixed(2)}\n\nThank you!\n${shopName}`;
+
+        navigator.clipboard.writeText(text).then(() => {
+            toast('📋 Complete Email text copied to clipboard!', 'ok');
+        }).catch(() => {
+            toast('❌ Copy failed', 'err');
+        });
+    }
+
+    // ─────────────────────────────────────────────
+    //   DYNAMIC UPI QR CODE MODAL
+    // ─────────────────────────────────────────────
+    function openQRModal() {
+        if (!billItems.length) return toast('⚠️ Pehle items add karein', 'err');
+        const sub     = billItems.reduce((s,i) => s + i.total, 0);
+        const disc    = calcDiscount(sub);
+        const taxable = sub - disc;
+        const taxAmt  = currentTaxPct > 0 ? (taxable * currentTaxPct / 100) : 0;
+        const grand   = taxable + taxAmt;
+
+        const profile  = JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}');
+        const upiId    = profile.upi || document.getElementById('shopMobile').value.trim() + '@upi';
+        const shopName = profile.name || document.getElementById('shopName').value.trim() || 'Billora POS';
+
+        document.getElementById('qrAmtDisplay').textContent = '₹' + grand.toFixed(2);
+        document.getElementById('qrVpaDisplay').textContent = profile.upi ? `UPI ID: ${profile.upi}` : 'ℹ️ Set custom UPI ID in Shop Settings';
+
+        // Build UPI URI Scheme
+        const vpa = profile.upi || '9325367464@ybl';
+        const upiUrl = `upi://pay?pa=${encodeURIComponent(vpa)}&pn=${encodeURIComponent(shopName)}&am=${grand.toFixed(2)}&cu=INR&tn=Billora%20Invoice`;
+        const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(upiUrl)}`;
+
+        document.getElementById('qrCodeImg').src = qrApi;
+        document.getElementById('qrModal').classList.add('show');
+    }
+
+    function closeQRModal() { document.getElementById('qrModal').classList.remove('show'); }
+    function closeQRModalOutside(e) { if (e.target === document.getElementById('qrModal')) closeQRModal(); }
+
+    // ─────────────────────────────────────────────
+    //   BILL HISTORY (SEARCH, RE-LOAD, EXPORT CSV)
+    // ─────────────────────────────────────────────
+    const HISTORY_KEY = 'billora-bill-history';
+
+    function saveBillToHistory() {
+        const shopName = document.getElementById('shopName').value.trim() || 'My Shop';
+        const sub      = billItems.reduce((s,i) => s + i.total, 0);
+        const disc     = calcDiscount(sub);
+        const taxable  = sub - disc;
+        const taxAmt   = currentTaxPct > 0 ? (taxable * currentTaxPct / 100) : 0;
+        const grand    = taxable + taxAmt;
+        const custName = document.getElementById('custName').value.trim();
+        const mob      = document.getElementById('mobile').value.trim();
+
+        const entry = {
+            id: 'BL' + Date.now().toString().slice(-6),
+            shop: shopName,
+            customer: custName || 'Walk-in',
+            mobile: mob,
+            items: JSON.parse(JSON.stringify(billItems)),
+            grand: grand,
+            mode: paymentMode,
+            status: isPaid ? 'PAID' : 'DUE',
+            date: new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}),
+            time: new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'}),
+            ts: Date.now()
+        };
+
+        let hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+        hist.unshift(entry);
+        hist = hist.slice(0, 30); // Store up to 30 recent bills
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(hist));
+        renderHistory();
+        updateCustSuggestions();
+    }
+
+    function renderHistory(filterText = '') {
+        const list = document.getElementById('historyList');
+        if (!list) return;
+        const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+        if (!hist.length) {
+            list.innerHTML = '<span class="history-empty">No bills yet. Create your first bill above!</span>';
+            return;
+        }
+
+        const filtered = filterText ? hist.filter(h =>
+            (h.customer || '').toLowerCase().includes(filterText.toLowerCase()) ||
+            (h.id || '').toLowerCase().includes(filterText.toLowerCase()) ||
+            (h.mobile || '').includes(filterText)
+        ) : hist;
+
+        if (!filtered.length) {
+            list.innerHTML = '<span class="history-empty">No matching bills found for "' + esc(filterText) + '".</span>';
+            return;
+        }
+
+        list.innerHTML = filtered.map((h, idx) => `
+            <div class="history-card">
+                <div class="hc-top">
+                    <span class="hc-name">${esc(h.customer)}</span>
+                    <span class="hc-amt">₹${h.grand.toFixed(2)}</span>
+                </div>
+                <div class="hc-meta">
+                    <span>${h.id} · ${h.items?.length || 0} items</span>
+                    <span>${h.date} ${h.time || ''}</span>
+                </div>
+                <div class="hc-meta">
+                    <span style="color:${h.status==='PAID'?'var(--green)':'var(--red)'};font-weight:700;">${h.mode} (${h.status})</span>
+                    ${h.mobile ? `<span>📞 ${esc(h.mobile)}</span>` : ''}
+                </div>
+                <div class="hc-btns">
+                    <button class="hc-btn load" onclick="loadBillFromHistory('${h.id}')" title="Load items back into editor">🔄 Re-load</button>
+                    <button class="hc-btn" onclick="printHistoryBill('${h.id}')">🖨 Print</button>
+                    <button class="hc-btn" onclick="reShareWA('${h.id}')">📱 WA</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function filterHistory() {
+        const q = document.getElementById('historySearch').value.trim();
+        renderHistory(q);
+    }
+
+    function loadBillFromHistory(billId) {
+        const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+        const entry = hist.find(h => h.id === billId);
+        if (!entry || !entry.items) return toast('⚠️ Bill not found', 'err');
+        billItems = JSON.parse(JSON.stringify(entry.items));
+        if (entry.customer && entry.customer !== 'Walk-in') document.getElementById('custName').value = entry.customer;
+        if (entry.mobile) document.getElementById('mobile').value = entry.mobile;
+        renderBill();
+        window.scrollTo({ top: 300, behavior: 'smooth' });
+        toast(`✅ Bill ${billId} re-loaded into editor!`, 'ok');
+    }
+
+    function reShareWA(billId) {
+        const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+        const h = hist.find(item => item.id === billId);
+        if (!h) return;
+        const mob = h.mobile || prompt('Enter WhatsApp Number:');
+        if (!mob) return;
+        document.getElementById('mobile').value = mob;
+        if (h.items) billItems = JSON.parse(JSON.stringify(h.items));
+        renderBill();
+        sendBill('whatsapp');
+    }
+
+    function printHistoryBill(billId) {
+        const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+        const h = hist.find(item => item.id === billId);
+        if (!h || !h.items) return;
+        billItems = JSON.parse(JSON.stringify(h.items));
+        renderBill();
+        printBill();
+    }
+
+    function exportHistoryCSV() {
+        const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+        if (!hist.length) return toast('⚠️ No bills in history to export', 'err');
+        let csv = 'Invoice ID,Date,Customer,Mobile,Payment Mode,Status,Items Count,Grand Total\n';
+        hist.forEach(h => {
+            csv += `"${h.id}","${h.date} ${h.time||''}","${h.customer||''}","${h.mobile||''}","${h.mode}","${h.status}",${h.items?.length||0},${h.grand.toFixed(2)}\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Billora_Sales_Report_${Date.now()}.csv`;
+        link.click();
+        toast('📥 Sales report exported to CSV successfully!', 'ok');
+    }
+
+    function clearHistory() {
+        if (!confirm('Are you sure you want to clear all bill history?')) return;
+        localStorage.removeItem(HISTORY_KEY);
+        renderHistory();
+        toast('🗑 History cleared successfully', 'info');
+    }
+
+    function updateCustSuggestions() {
+        const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+        const names = [...new Set(hist.map(h => h.customer).filter(c => c && c !== 'Walk-in'))];
+        const dl = document.getElementById('custHistorySugg');
+        if (dl) dl.innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
+    }
+
+    // ─────────────────────────────────────────────
+    //   HELPERS
+    // ─────────────────────────────────────────────
+    function showOverlay(msg) {
+        document.getElementById('pdfMsg').textContent = msg;
+        document.getElementById('pdfOverlay').classList.add('show');
+    }
+    function hideOverlay() { document.getElementById('pdfOverlay').classList.remove('show'); }
+
+    let toastTimer;
+    function toast(msg, type = 'info') {
+        const t = document.getElementById('toast');
+        t.innerHTML = msg; t.className = 'toast '+type+' show';
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.remove('show'), 3800);
+    }
+    function esc(s) {
+        if (!s) return '';
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // Keyboard Shortcuts
+    document.getElementById('itemQty').addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); });
+    document.getElementById('itemName').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('itemRate').focus(); });
+    document.getElementById('itemRate').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('itemQty').focus(); });
+    window.addEventListener('keydown', e => {
+        if (e.key === 'F2') { e.preventDefault(); document.getElementById('itemName').focus(); }
+    });
+
+    // ─────────────────────────────────────────────
+    //   DARK / LIGHT THEME
+    // ─────────────────────────────────────────────
+    function toggleTheme() {
+        const isLight = document.body.classList.toggle('light-mode');
+        document.getElementById('toggleTrack').classList.toggle('dark', !isLight);
+        document.getElementById('toggleThumb').textContent = isLight ? '☀️' : '🌙';
+        document.getElementById('toggleLabel').textContent = isLight ? 'Light' : 'Dark';
+        localStorage.setItem('billora-theme', isLight ? 'light' : 'dark');
+    }
+    (function() {
+        if (localStorage.getItem('billora-theme') === 'light') {
+            document.body.classList.add('light-mode');
+            document.getElementById('toggleTrack').classList.remove('dark');
+            document.getElementById('toggleThumb').textContent = '☀️';
+            document.getElementById('toggleLabel').textContent = 'Light';
+        }
+    })();
+
+    // ─────────────────────────────────────────────
+    //   PROFILE & SHOP SETTINGS
+    // ─────────────────────────────────────────────
+    const PROFILE_KEY = 'billora-shop-profile';
+
+    function loadProfile() {
+        const p = JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null');
+        if (!p) return;
+        if (p.name)    document.getElementById('shopName').value    = p.name;
+        if (p.address) document.getElementById('shopAddress').value = p.address;
+        if (p.mobile)  document.getElementById('shopMobile').value  = p.mobile;
+        updateProfileChip(p);
+    }
+
+    function autoSaveProfile() {
+        const p = {
+            name: document.getElementById('shopName').value.trim(),
+            address: document.getElementById('shopAddress').value.trim(),
+            mobile: document.getElementById('shopMobile').value.trim()
+        };
+        if (p.name || p.address || p.mobile) {
+            const saved = JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}');
+            localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...saved, ...p }));
+            updateProfileChip(JSON.parse(localStorage.getItem(PROFILE_KEY)));
+        }
+    }
+
+    function updateProfileChip(p) {
+        const chip = document.getElementById('profileChip');
+        const chipName = document.getElementById('profileChipName');
+        if (p && p.name) { chipName.textContent = p.name; chip.classList.add('on'); }
+        else { chip.classList.remove('on'); }
+    }
+
+    function openProfileModal() {
+        const p = JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}');
+        document.getElementById('pm-name').value    = p.name    || document.getElementById('shopName').value.trim();
+        document.getElementById('pm-address').value = p.address || document.getElementById('shopAddress').value.trim();
+        document.getElementById('pm-mobile').value  = p.mobile  || document.getElementById('shopMobile').value.trim();
+        document.getElementById('pm-upi').value     = p.upi     || '';
+        document.getElementById('pm-gst').value     = p.gst     || '';
+        document.getElementById('pm-thanks').value  = p.thanks  || '';
+        document.getElementById('profileModal').classList.add('show');
+        document.getElementById('pm-name').focus();
+    }
+
+    function closeProfileModal() { document.getElementById('profileModal').classList.remove('show'); }
+    function closeProfileModalOutside(e) { if (e.target === document.getElementById('profileModal')) closeProfileModal(); }
+
+    function saveProfile() {
+        const p = {
+            name: document.getElementById('pm-name').value.trim(),
+            address: document.getElementById('pm-address').value.trim(),
+            mobile: document.getElementById('pm-mobile').value.trim(),
+            upi: document.getElementById('pm-upi').value.trim(),
+            gst: document.getElementById('pm-gst').value.trim().toUpperCase(),
+            thanks: document.getElementById('pm-thanks').value.trim()
+        };
+        if (!p.name) return toast('⚠️ Shop ka naam zaroor likhein', 'err');
+        localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+        document.getElementById('shopName').value = p.name;
+        document.getElementById('shopAddress').value = p.address;
+        document.getElementById('shopMobile').value = p.mobile;
+        updateProfileChip(p);
+        closeProfileModal();
+        toast('✅ Settings & UPI successfully saved! 🎉', 'ok');
+    }
+
+    function clearProfile() {
+        if (!confirm('Shop settings reset karna chahte hain?')) return;
+        localStorage.removeItem(PROFILE_KEY);
+        document.getElementById('shopName').value = '';
+        document.getElementById('shopAddress').value = '';
+        document.getElementById('shopMobile').value = '';
+        ['pm-name','pm-address','pm-mobile','pm-upi','pm-gst','pm-thanks'].forEach(id => {
+            const el = document.getElementById(id); if (el) el.value = '';
+        });
+        updateProfileChip({});
+        closeProfileModal();
+        toast('🗑 Settings reset ho gayi', 'info');
+    }
+
+    // Initialize on load
+    initSettings();
+    loadProfile();
+    renderHistory();
+    updateCustSuggestions();
+    </script>
+</body>
+</html>
